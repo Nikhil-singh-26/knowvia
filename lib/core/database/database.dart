@@ -105,6 +105,10 @@ class QuizSessions extends Table {
       text().references(Notes, #id, onDelete: KeyAction.cascade)();
   IntColumn get score => integer()();
   IntColumn get totalQuestions => integer()();
+  TextColumn get title => text().withDefault(const Constant('Document Quiz'))();
+  TextColumn get questionsJson => text().nullable()();
+  TextColumn get category => text().nullable()();
+  TextColumn get weakTopics => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -115,6 +119,42 @@ class FlashcardReviews extends Table {
   IntColumn get cardIndex => integer()();
   BoolColumn get isCorrect => boolean()();
   DateTimeColumn get createdAt => dateTime()();
+}
+
+class Flashcards extends Table {
+  TextColumn get id => text()();
+  TextColumn get documentId =>
+      text().nullable().references(Notes, #id, onDelete: KeyAction.cascade)();
+  TextColumn get deckTitle => text().withDefault(const Constant('General'))();
+  TextColumn get front => text()();
+  TextColumn get back => text()();
+  RealColumn get easeFactor => real().withDefault(const Constant(2.5))();
+  IntColumn get intervalDays => integer().withDefault(const Constant(0))();
+  IntColumn get repetitions => integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextReviewAt => dateTime()();
+  DateTimeColumn get lastReviewedAt => dateTime().nullable()();
+  TextColumn get status => text().withDefault(const Constant('new'))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class StudyNotes extends Table {
+  TextColumn get id => text()();
+  TextColumn get documentId =>
+      text().nullable().references(Notes, #id, onDelete: KeyAction.cascade)();
+  TextColumn get title => text()();
+  TextColumn get content => text()();
+  TextColumn get tags => text().nullable()();
+  TextColumn get sourceExcerpt => text().nullable()();
+  BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 class DocumentQas extends Table {
@@ -136,6 +176,8 @@ class DocumentQas extends Table {
     SearchHistory,
     QuizSessions,
     FlashcardReviews,
+    Flashcards,
+    StudyNotes,
     DocumentQas,
   ],
 )
@@ -144,7 +186,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.memory() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -178,6 +220,14 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 7) {
         await m.createTable(documentQas);
+      }
+      if (from < 8) {
+        await m.createTable(flashcards);
+        await m.createTable(studyNotes);
+        await m.addColumn(quizSessions, quizSessions.title);
+        await m.addColumn(quizSessions, quizSessions.questionsJson);
+        await m.addColumn(quizSessions, quizSessions.category);
+        await m.addColumn(quizSessions, quizSessions.weakTopics);
       }
     },
   );
@@ -358,14 +408,15 @@ class AppDatabase extends _$AppDatabase {
             ..where((tbl) => tbl.documentId.isNull())
             ..orderBy([
               (t) =>
-                  OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+                  OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc),
             ]))
           .get();
     }
     return (select(documentQas)
           ..where((tbl) => tbl.documentId.equals(documentId))
           ..orderBy([
-            (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+            (t) =>
+                OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc),
           ]))
         .get();
   }
@@ -376,24 +427,23 @@ class AppDatabase extends _$AppDatabase {
             ..where((tbl) => tbl.documentId.isNull())
             ..orderBy([
               (t) =>
-                  OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+                  OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc),
             ]))
           .watch();
     }
     return (select(documentQas)
           ..where((tbl) => tbl.documentId.equals(documentId))
           ..orderBy([
-            (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+            (t) =>
+                OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc),
           ]))
         .watch();
   }
 
   Stream<List<DocumentQa>> watchAllQas() {
-    return (select(documentQas)
-          ..orderBy([
-            (t) =>
-                OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)
-          ]))
+    return (select(documentQas)..orderBy([
+          (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc),
+        ]))
         .watch();
   }
 
@@ -418,12 +468,148 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearQasForDocument(String? documentId) {
     if (documentId == null) {
-      return (delete(documentQas)..where((tbl) => tbl.documentId.isNull())).go();
+      return (delete(
+        documentQas,
+      )..where((tbl) => tbl.documentId.isNull())).go();
     }
-    return (delete(documentQas)
-          ..where((tbl) => tbl.documentId.equals(documentId)))
-        .go();
+    return (delete(
+      documentQas,
+    )..where((tbl) => tbl.documentId.equals(documentId))).go();
   }
+
+  // --- Flashcard Queries ---
+  Future<List<Flashcard>> getAllFlashcards() => select(flashcards).get();
+  Stream<List<Flashcard>> watchAllFlashcards() =>
+      (select(flashcards)..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc),
+          ]))
+          .watch();
+
+  Future<List<Flashcard>> getFlashcardsForDocument(String docId) =>
+      (select(flashcards)..where((tbl) => tbl.documentId.equals(docId))).get();
+
+  Stream<List<Flashcard>> watchFlashcardsForDocument(String docId) =>
+      (select(flashcards)
+            ..where((tbl) => tbl.documentId.equals(docId))
+            ..orderBy([
+              (t) => OrderingTerm(
+                expression: t.createdAt,
+                mode: OrderingMode.desc,
+              ),
+            ]))
+          .watch();
+
+  Future<List<Flashcard>> getDueFlashcards(DateTime now) => (select(
+    flashcards,
+  )..where((tbl) => tbl.nextReviewAt.isSmallerOrEqualValue(now))).get();
+
+  Stream<List<Flashcard>> watchDueFlashcards(DateTime now) =>
+      (select(flashcards)
+            ..where((tbl) => tbl.nextReviewAt.isSmallerOrEqualValue(now))
+            ..orderBy([
+              (t) => OrderingTerm(
+                expression: t.nextReviewAt,
+                mode: OrderingMode.asc,
+              ),
+            ]))
+          .watch();
+
+  Future<void> insertFlashcard(FlashcardsCompanion card) =>
+      into(flashcards).insert(card);
+
+  Future<void> insertFlashcards(List<FlashcardsCompanion> cards) =>
+      batch((b) => b.insertAll(flashcards, cards));
+
+  Future<bool> updateFlashcard(FlashcardsCompanion card) =>
+      update(flashcards).replace(card);
+
+  Future<void> deleteFlashcard(String id) =>
+      (delete(flashcards)..where((tbl) => tbl.id.equals(id))).go();
+
+  Future<void> deleteFlashcardsForDocument(String docId) =>
+      (delete(flashcards)..where((tbl) => tbl.documentId.equals(docId))).go();
+
+  // --- Study Notes / Bookmarks Queries ---
+  Future<List<StudyNote>> getAllStudyNotes() =>
+      (select(studyNotes)..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc),
+          ]))
+          .get();
+
+  Stream<List<StudyNote>> watchAllStudyNotes() =>
+      (select(studyNotes)..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+            (t) =>
+                OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc),
+          ]))
+          .watch();
+
+  Future<List<StudyNote>> getStudyNotesForDocument(String docId) =>
+      (select(studyNotes)..where((tbl) => tbl.documentId.equals(docId))).get();
+
+  Stream<List<StudyNote>> watchStudyNotesForDocument(String docId) =>
+      (select(studyNotes)
+            ..where((tbl) => tbl.documentId.equals(docId))
+            ..orderBy([
+              (t) =>
+                  OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+              (t) => OrderingTerm(
+                expression: t.updatedAt,
+                mode: OrderingMode.desc,
+              ),
+            ]))
+          .watch();
+
+  Future<void> insertStudyNote(StudyNotesCompanion note) =>
+      into(studyNotes).insert(note);
+
+  Future<bool> updateStudyNote(StudyNotesCompanion note) =>
+      update(studyNotes).replace(note);
+
+  Future<void> deleteStudyNote(String id) =>
+      (delete(studyNotes)..where((tbl) => tbl.id.equals(id))).go();
+
+  // --- Quiz Session Queries ---
+  Stream<List<QuizSession>> watchAllQuizSessions() =>
+      (select(quizSessions)..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc),
+          ]))
+          .watch();
+
+  Stream<List<QuizSession>> watchQuizSessionsForDocument(String docId) =>
+      (select(quizSessions)
+            ..where((tbl) => tbl.noteId.equals(docId))
+            ..orderBy([
+              (t) => OrderingTerm(
+                expression: t.createdAt,
+                mode: OrderingMode.desc,
+              ),
+            ]))
+          .watch();
+
+  Future<int> insertQuizSessionRecord(QuizSessionsCompanion session) =>
+      into(quizSessions).insert(session);
+
+  Future<void> deleteQuizSession(int id) =>
+      (delete(quizSessions)..where((tbl) => tbl.id.equals(id))).go();
+
+  // --- Reset All Data ---
+  Future<void> clearAllUserData() async {
+    await delete(studyNotes).go();
+    await delete(flashcards).go();
+    await delete(quizSessions).go();
+    await delete(flashcardReviews).go();
+    await delete(documentQas).go();
+    await delete(noteAttachments).go();
+    await delete(notes).go();
+    await delete(searchHistory).go();
+  }
+
+  Future<void> resetAllData() => clearAllUserData();
 }
 
 LazyDatabase _openConnection() {

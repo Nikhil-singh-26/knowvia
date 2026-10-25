@@ -8,14 +8,18 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:share_plus/share_plus.dart';
 
+import 'package:uuid/uuid.dart';
 import '../../../../core/ai/ai_provider.dart';
-import '../../../../core/ai/concept_service.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/database/database.dart';
 import '../../../../main.dart';
 import '../../../../core/utils/attachment_helper.dart';
 import '../../../../core/utils/connectivity_service.dart';
+import '../../../study/presentation/screens/flashcard_study_screen.dart';
+import '../../../study/presentation/screens/quiz_runner_screen.dart';
+import '../../../study/presentation/screens/study_notes_screen.dart';
 
 class NoteDetailScreen extends ConsumerStatefulWidget {
   final Note note;
@@ -101,28 +105,12 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
   void _shareNote(Note note) {
     final text =
         '''
-${note.title}
-
+# ${note.title}
 Category: ${note.category}
 
 ${note.content}
 ''';
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Note'),
-          content: SelectableText(text),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
+    SharePlus.instance.share(ShareParams(text: text, subject: note.title));
   }
 
   void _openAttachment(BuildContext context, File file) {
@@ -267,6 +255,24 @@ ${note.content}
     }
   }
 
+  void _showLoadingDialog(BuildContext context, String message) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _analyzeWithAi(
     BuildContext context,
     WidgetRef ref,
@@ -277,21 +283,7 @@ ${note.content}
       return;
     }
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Expanded(child: Text('AI is analyzing your note...')),
-            ],
-          ),
-        );
-      },
-    );
+    _showLoadingDialog(context, 'AI is analyzing your note...');
 
     try {
       final service = ref.read(geminiServiceProvider);
@@ -318,11 +310,6 @@ ${note.content}
           updatedAt: drift.Value(DateTime.now()),
         ),
       );
-
-      final updatedNote = await database.getNoteById(note.id);
-      if (updatedNote != null) {
-        await ref.read(conceptServiceProvider).processNoteForMap(updatedNote);
-      }
 
       if (!mounted || !context.mounted) return;
 
@@ -511,26 +498,52 @@ ${note.content}
     WidgetRef ref,
     Note note,
   ) async {
+    final db = ref.read(databaseProvider);
+    final existing = await db.getFlashcardsForDocument(note.id);
+
+    if (existing.isNotEmpty && context.mounted) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Flashcards Available'),
+          content: Text(
+            'You already have ${existing.length} flashcards for this document. Would you like to study the existing deck or generate new cards with AI?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'study'),
+              child: const Text('Study Existing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'generate'),
+              child: const Text('Generate New Deck'),
+            ),
+          ],
+        ),
+      );
+
+      if (choice == 'study' && context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                FlashcardStudyScreen(deckTitle: note.title, cards: existing),
+          ),
+        );
+        return;
+      } else if (choice != 'generate') {
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+
     if (!_isOnline()) {
       _showOfflineMessage();
       return;
     }
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Expanded(child: Text('Creating flashcards...')),
-            ],
-          ),
-        );
-      },
-    );
+    _showLoadingDialog(context, 'Creating flashcards with AI...');
 
     try {
       final service = ref.read(geminiServiceProvider);
@@ -542,7 +555,7 @@ ${note.content}
 
       if (!mounted || !context.mounted) return;
       _dismissLoadingDialog(context);
-      _showFlashcards(context, note, result);
+      _showFlashcardsPreviewAndSave(context, note, result);
     } catch (e) {
       if (!mounted || !context.mounted) return;
       _dismissLoadingDialog(context);
@@ -552,18 +565,191 @@ ${note.content}
     }
   }
 
-  void _showFlashcards(BuildContext context, Note note, String result) {
+  void _showFlashcardsPreviewAndSave(
+    BuildContext context,
+    Note note,
+    String result,
+  ) {
     try {
       final data = jsonDecode(result) as Map<String, dynamic>;
-      final cards = List<Map<String, dynamic>>.from(
+      final rawCards = List<Map<String, dynamic>>.from(
         (data['cards'] as List).map((card) => Map<String, dynamic>.from(card)),
       );
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _FlashcardsScreen(title: note.title, cards: cards),
+
+      if (rawCards.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No flashcards were generated.')),
+        );
+        return;
+      }
+
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
+        builder: (sheetCtx) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            maxChildSize: 0.95,
+            minChildSize: 0.5,
+            expand: false,
+            builder: (ctx, scrollController) {
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Iconsax.cards, color: AppColors.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Generated Flashcards (${rawCards.length})',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Review the generated cards below. Tap "Save & Study" to add them to your spaced-repetition deck.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: ListView.separated(
+                        controller: scrollController,
+                        itemCount: rawCards.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (c, idx) {
+                          final item = rawCards[idx];
+                          return Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.outline.withValues(alpha: 0.15),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Q${idx + 1}: ${item["question"] ?? ""}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'A: ${item["answer"] ?? ""}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          final db = ref.read(databaseProvider);
+                          final now = DateTime.now();
+                          final List<FlashcardsCompanion> companions = [];
+                          final List<Flashcard> createdFlashcards = [];
+
+                          for (final cardMap in rawCards) {
+                            final cardId = const Uuid().v4();
+                            final front = cardMap['question']?.toString() ?? '';
+                            final back = cardMap['answer']?.toString() ?? '';
+                            if (front.isEmpty || back.isEmpty) continue;
+
+                            companions.add(
+                              FlashcardsCompanion(
+                                id: drift.Value(cardId),
+                                documentId: drift.Value(note.id),
+                                deckTitle: drift.Value(note.title),
+                                front: drift.Value(front),
+                                back: drift.Value(back),
+                                easeFactor: const drift.Value(2.5),
+                                intervalDays: const drift.Value(0),
+                                repetitions: const drift.Value(0),
+                                nextReviewAt: drift.Value(now),
+                                status: const drift.Value('new'),
+                                createdAt: drift.Value(now),
+                                updatedAt: drift.Value(now),
+                              ),
+                            );
+
+                            createdFlashcards.add(
+                              Flashcard(
+                                id: cardId,
+                                documentId: note.id,
+                                deckTitle: note.title,
+                                front: front,
+                                back: back,
+                                easeFactor: 2.5,
+                                intervalDays: 0,
+                                repetitions: 0,
+                                nextReviewAt: now,
+                                status: 'new',
+                                createdAt: now,
+                                updatedAt: now,
+                              ),
+                            );
+                          }
+
+                          await db.insertFlashcards(companions);
+
+                          if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+
+                          if (context.mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FlashcardStudyScreen(
+                                  deckTitle: note.title,
+                                  cards: createdFlashcards,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Iconsax.play),
+                        label: const Text(
+                          'Save & Study Deck',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
       );
     } catch (_) {
       if (!mounted) return;
@@ -583,21 +769,7 @@ ${note.content}
       return;
     }
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Expanded(child: Text('AI is creating your quiz...')),
-            ],
-          ),
-        );
-      },
-    );
+    _showLoadingDialog(context, 'AI is creating your quiz...');
 
     try {
       final service = ref.read(geminiServiceProvider);
@@ -627,11 +799,24 @@ ${note.content}
           (question) => Map<String, dynamic>.from(question),
         ),
       );
+
+      if (questions.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No quiz questions were generated.')),
+        );
+        return;
+      }
+
       if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => _QuizScreen(title: note.title, questions: questions),
+          builder: (_) => QuizRunnerScreen(
+            title: note.title,
+            noteId: note.id,
+            category: note.category,
+            questions: questions,
+          ),
         ),
       );
     } catch (_) {
@@ -640,6 +825,40 @@ ${note.content}
         const SnackBar(content: Text('Could not read the generated quiz')),
       );
     }
+  }
+
+  Future<void> _saveAnswerAsStudyNote(DocumentQa qa) async {
+    final db = ref.read(databaseProvider);
+    final now = DateTime.now();
+    await db.insertStudyNote(
+      StudyNotesCompanion(
+        id: drift.Value(const Uuid().v4()),
+        documentId: drift.Value(_currentNote.id),
+        title: drift.Value('Q: ${qa.question}'),
+        content: drift.Value(qa.answer),
+        tags: const drift.Value('AI,Q&A,Bookmark'),
+        sourceExcerpt: drift.Value(qa.question),
+        isPinned: const drift.Value(false),
+        createdAt: drift.Value(now),
+        updatedAt: drift.Value(now),
+      ),
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Saved to Study Notes & Bookmarks!'),
+        action: SnackBarAction(
+          label: 'View',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const StudyNotesScreen()),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _listenQa() async {
@@ -681,10 +900,9 @@ ${note.content}
       final db = ref.read(databaseProvider);
 
       final pastQas = await db.getQasForDocument(note.id);
-      final history = pastQas.map((q) => {
-        'question': q.question,
-        'answer': q.answer,
-      }).toList();
+      final history = pastQas
+          .map((q) => {'question': q.question, 'answer': q.answer})
+          .toList();
 
       final answer = await gemini.askDocumentQuestion(
         documentTitle: note.title,
@@ -693,11 +911,7 @@ ${note.content}
         history: history,
       );
 
-      await db.insertQa(
-        documentId: note.id,
-        question: query,
-        answer: answer,
-      );
+      await db.insertQa(documentId: note.id, question: query, answer: answer);
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_qaScrollController.hasClients) {
@@ -710,9 +924,9 @@ ${note.content}
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Q&A Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Q&A Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isQaLoading = false);
@@ -915,7 +1129,11 @@ ${note.content}
                 children: [
                   const Row(
                     children: [
-                      Icon(Iconsax.magic_star, size: 18, color: AppColors.primary),
+                      Icon(
+                        Iconsax.magic_star,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'AI Executive Summary',
@@ -952,7 +1170,9 @@ ${note.content}
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
+                color: Theme.of(
+                  context,
+                ).colorScheme.outline.withValues(alpha: 0.18),
               ),
             ),
             child: SelectableText(
@@ -986,7 +1206,9 @@ ${note.content}
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.18),
                   ),
                 ),
                 child: isImage
@@ -1100,7 +1322,11 @@ ${note.content}
           color: theme.colorScheme.surface,
           child: Row(
             children: [
-              const Icon(Iconsax.message_question, color: AppColors.primary, size: 18),
+              const Icon(
+                Iconsax.message_question,
+                color: AppColors.primary,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -1156,7 +1382,10 @@ ${note.content}
                       const SizedBox(height: 8),
                       const Text(
                         'Type or speak your question below.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Wrap(
@@ -1164,8 +1393,15 @@ ${note.content}
                         runSpacing: 8,
                         children: suggested.map((q) {
                           return ActionChip(
-                            avatar: const Icon(Iconsax.magic_star, size: 14, color: AppColors.primary),
-                            label: Text(q, style: const TextStyle(fontSize: 12)),
+                            avatar: const Icon(
+                              Iconsax.magic_star,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+                            label: Text(
+                              q,
+                              style: const TextStyle(fontSize: 12),
+                            ),
                             onPressed: () => _submitDocQa(note, q),
                           );
                         }).toList(),
@@ -1190,7 +1426,9 @@ ${note.content}
                           color: theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.15,
+                            ),
                           ),
                         ),
                         child: const Row(
@@ -1204,7 +1442,10 @@ ${note.content}
                             SizedBox(width: 10),
                             Text(
                               'Analyzing document...',
-                              style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                           ],
                         ),
@@ -1252,10 +1493,14 @@ ${note.content}
                           child: Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF1E1E26) : Colors.white,
+                              color: isDark
+                                  ? const Color(0xFF1E1E26)
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                                color: theme.colorScheme.outline.withValues(
+                                  alpha: 0.15,
+                                ),
                               ),
                             ),
                             child: Column(
@@ -1279,6 +1524,19 @@ ${note.content}
                                     ),
                                     const Spacer(),
                                     IconButton(
+                                      tooltip: 'Save as Study Note',
+                                      icon: const Icon(
+                                        Iconsax.note_favorite,
+                                        size: 16,
+                                      ),
+                                      constraints: const BoxConstraints(),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: () =>
+                                          _saveAnswerAsStudyNote(qa),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    IconButton(
+                                      tooltip: 'Copy answer',
                                       icon: const Icon(Iconsax.copy, size: 15),
                                       constraints: const BoxConstraints(),
                                       padding: EdgeInsets.zero,
@@ -1286,9 +1544,13 @@ ${note.content}
                                         Clipboard.setData(
                                           ClipboardData(text: qa.answer),
                                         );
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           const SnackBar(
-                                            content: Text('Copied to clipboard'),
+                                            content: Text(
+                                              'Copied to clipboard',
+                                            ),
                                             duration: Duration(seconds: 2),
                                           ),
                                         );
@@ -1300,22 +1562,24 @@ ${note.content}
                                 MarkdownBody(
                                   data: qa.answer,
                                   selectable: true,
-                                  styleSheet: MarkdownStyleSheet.fromTheme(
-                                    theme,
-                                  ).copyWith(
-                                    p: TextStyle(
-                                      fontSize: 14,
-                                      height: 1.5,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
-                                  ),
+                                  styleSheet:
+                                      MarkdownStyleSheet.fromTheme(
+                                        theme,
+                                      ).copyWith(
+                                        p: TextStyle(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   DateFormat('h:mm a').format(qa.createdAt),
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                                    color: theme.colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.6),
                                   ),
                                 ),
                               ],
@@ -1366,7 +1630,8 @@ ${note.content}
                     hintText: 'Ask about this document...',
                     hintStyle: const TextStyle(fontSize: 13),
                     filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    fillColor: theme.colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.4),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
@@ -1424,320 +1689,6 @@ class _AiSection extends StatelessWidget {
           children: items.map((item) => Chip(label: Text(item))).toList(),
         ),
       ],
-    );
-  }
-}
-
-class _QuizScreen extends StatefulWidget {
-  final String title;
-  final List<Map<String, dynamic>> questions;
-  const _QuizScreen({required this.title, required this.questions});
-  @override
-  State<_QuizScreen> createState() => _QuizScreenState();
-}
-
-class _QuizScreenState extends State<_QuizScreen> {
-  int currentQuestion = 0;
-  int score = 0;
-  int? selectedAnswer;
-  bool answered = false;
-
-  void _selectAnswer(int index) {
-    if (answered) return;
-    final correctAnswer = widget.questions[currentQuestion]['answer'] as int;
-    setState(() {
-      selectedAnswer = index;
-      answered = true;
-      if (index == correctAnswer) score++;
-    });
-  }
-
-  void _nextQuestion() {
-    if (currentQuestion == widget.questions.length - 1) {
-      _showResult();
-      return;
-    }
-    setState(() {
-      currentQuestion++;
-      selectedAnswer = null;
-      answered = false;
-    });
-  }
-
-  void _showResult() {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Quiz Complete 🎉'),
-          content: Text('You scored $score out of ${widget.questions.length}.'),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final question = widget.questions[currentQuestion];
-    final questionText = question['question']?.toString() ?? '';
-    final options = List<String>.from(question['options'] ?? const []);
-    final correctAnswer = question['answer'] as int;
-    final explanation = question['explanation']?.toString() ?? '';
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Knowledge Quiz',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: (currentQuestion + 1) / widget.questions.length,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Question ${currentQuestion + 1} of ${widget.questions.length}',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              questionText,
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ...List.generate(options.length, (index) {
-              final isSelected = selectedAnswer == index;
-              final isCorrect = index == correctAnswer;
-              Color? background;
-              if (answered && isCorrect) {
-                background = Colors.green.withValues(alpha: 0.15);
-              } else if (answered && isSelected) {
-                background = Colors.red.withValues(alpha: 0.15);
-              }
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                width: double.infinity,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.all(16),
-                    backgroundColor: background,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () => _selectAnswer(index),
-                  child: Text(
-                    '${String.fromCharCode(65 + index)}. ${options[index]}',
-                  ),
-                ),
-              );
-            }),
-            if (answered) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(explanation, style: const TextStyle(height: 1.5)),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: _nextQuestion,
-                  child: Text(
-                    currentQuestion == widget.questions.length - 1
-                        ? 'See Result'
-                        : 'Next Question',
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FlashcardsScreen extends StatefulWidget {
-  final String title;
-  final List<Map<String, dynamic>> cards;
-  const _FlashcardsScreen({required this.title, required this.cards});
-  @override
-  State<_FlashcardsScreen> createState() => _FlashcardsScreenState();
-}
-
-class _FlashcardsScreenState extends State<_FlashcardsScreen> {
-  int currentCard = 0;
-  bool showAnswer = false;
-
-  void _nextCard() {
-    if (currentCard == widget.cards.length - 1) {
-      setState(() {
-        currentCard = 0;
-        showAnswer = false;
-      });
-      return;
-    }
-    setState(() {
-      currentCard++;
-      showAnswer = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final card = widget.cards[currentCard];
-    final question = card['question']?.toString() ?? '';
-    final answer = card['answer']?.toString() ?? '';
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Flashcards',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Card ${currentCard + 1} of ${widget.cards.length}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 20),
-            LinearProgressIndicator(
-              value: (currentCard + 1) / widget.cards.length,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            const SizedBox(height: 30),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() {
-                  showAnswer = !showAnswer;
-                }),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.15),
-                    ),
-                  ),
-                  child: Center(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: Column(
-                        key: ValueKey(showAnswer),
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            showAnswer
-                                ? Iconsax.tick_circle
-                                : Iconsax.message_question,
-                            size: 42,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            showAnswer ? answer : question,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w700,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            showAnswer
-                                ? 'Tap to see question'
-                                : 'Tap to reveal answer',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: _nextCard,
-                icon: const Icon(Iconsax.arrow_right),
-                label: Text(
-                  currentCard == widget.cards.length - 1
-                      ? 'Restart'
-                      : 'Next Card',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

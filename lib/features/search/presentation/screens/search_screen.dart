@@ -37,17 +37,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
 
     try {
-      final notesData = allNotes.map((n) => {
-        'id': n.id,
-        'title': n.title,
-        'category': n.category,
-        'content': n.content,
-      }).toList();
+      final notesData = allNotes
+          .map(
+            (n) => {
+              'id': n.id,
+              'title': n.title,
+              'category': n.category,
+              'content': n.content,
+            },
+          )
+          .toList();
 
-      final relevantIds = await ref.read(geminiServiceProvider).semanticSearch(
-        query: _query,
-        notes: notesData,
-      );
+      final relevantIds = await ref
+          .read(geminiServiceProvider)
+          .semanticSearch(query: _query, notes: notesData);
 
       final results = relevantIds
           .map((id) => allNotes.firstWhere((n) => n.id == id))
@@ -60,10 +63,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
       // Save to history
       final db = ref.read(databaseProvider);
-      await db.into(db.searchHistory).insert(SearchHistoryCompanion.insert(
-        query: _query,
-        createdAt: DateTime.now(),
-      ));
+      await db
+          .into(db.searchHistory)
+          .insert(
+            SearchHistoryCompanion.insert(
+              query: _query,
+              createdAt: DateTime.now(),
+            ),
+          );
     } catch (e) {
       setState(() => _isLoading = false);
     }
@@ -84,13 +91,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: StreamBuilder<List<Note>>(
         stream: database.select(database.notes).watch(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final notes = snapshot.data!;
 
-          final categories = [
-            'All',
-            ...notes.map((n) => n.category).toSet(),
-          ];
+          final categories = ['All', ...notes.map((n) => n.category).toSet()];
 
           List<Note> displayedNotes;
           if (_isSemanticSearch) {
@@ -98,11 +104,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           } else {
             displayedNotes = notes.where((note) {
               final q = _query.toLowerCase();
-              final matchesSearch = q.isEmpty ||
+              final matchesSearch =
+                  q.isEmpty ||
                   note.title.toLowerCase().contains(q) ||
                   note.content.toLowerCase().contains(q) ||
                   note.category.toLowerCase().contains(q);
-              final matchesCategory = _selectedCategory == 'All' || note.category == _selectedCategory;
+              final matchesCategory =
+                  _selectedCategory == 'All' ||
+                  note.category == _selectedCategory;
               return matchesSearch && matchesCategory;
             }).toList();
           }
@@ -148,20 +157,39 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       children: [
                         Expanded(
                           child: ActionChip(
-                            avatar: Icon(_isSemanticSearch ? Iconsax.magic_star : Iconsax.search_normal_1, size: 16),
-                            label: Text(_isSemanticSearch ? 'Semantic Active' : 'Semantic Search'),
+                            avatar: Icon(
+                              _isSemanticSearch
+                                  ? Iconsax.magic_star
+                                  : Iconsax.search_normal_1,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _isSemanticSearch
+                                  ? 'Semantic Active'
+                                  : 'Semantic Search',
+                            ),
                             onPressed: () => _performSemanticSearch(notes),
-                            backgroundColor: _isSemanticSearch ? AppColors.primary.withValues(alpha: 0.1) : null,
+                            backgroundColor: _isSemanticSearch
+                                ? AppColors.primary.withValues(alpha: 0.1)
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 10),
                         FutureBuilder<List<SearchHistoryData>>(
-                          future: (database.select(database.searchHistory)
-                                ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt, mode: drift.OrderingMode.desc)])
-                                ..limit(1))
-                              .get(),
+                          future:
+                              (database.select(database.searchHistory)
+                                    ..orderBy([
+                                      (t) => drift.OrderingTerm(
+                                        expression: t.createdAt,
+                                        mode: drift.OrderingMode.desc,
+                                      ),
+                                    ])
+                                    ..limit(1))
+                                  .get(),
                           builder: (context, hist) {
-                            if (!hist.hasData || hist.data!.isEmpty) return const SizedBox.shrink();
+                            if (!hist.hasData || hist.data!.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
                             return ActionChip(
                               label: const Text('Recent'),
                               onPressed: () {
@@ -185,20 +213,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: categories.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 8),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 8),
                     itemBuilder: (context, index) {
                       final cat = categories[index];
                       final sel = cat == _selectedCategory;
                       return ChoiceChip(
                         label: Text(cat),
                         selected: sel,
-                        onSelected: (selected) => setState(() => _selectedCategory = cat),
+                        onSelected: (selected) =>
+                            setState(() => _selectedCategory = cat),
                       );
                     },
                   ),
                 ),
 
-              if (_isLoading) const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()),
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(),
+                ),
 
               Expanded(
                 child: displayedNotes.isEmpty
@@ -206,8 +240,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     : ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: displayedNotes.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) => _NoteSearchCard(note: displayedNotes[index]),
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) =>
+                            _NoteSearchCard(note: displayedNotes[index]),
                       ),
               ),
             ],

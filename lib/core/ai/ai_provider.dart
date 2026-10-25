@@ -4,7 +4,5 @@ import 'ai_config.dart';
 import 'gemini_service.dart';
 
 final geminiServiceProvider = Provider<GeminiService>((ref) {
-  return GeminiService(
-    AiConfig.geminiApiKey,
-  );
+  return GeminiService(AiConfig.geminiApiKey);
 });

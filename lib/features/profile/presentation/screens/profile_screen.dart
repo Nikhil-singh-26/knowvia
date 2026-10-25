@@ -203,33 +203,95 @@ class ProfileScreen extends ConsumerWidget {
             builder: (context, noteSnapshot) {
               final notes = noteSnapshot.data ?? [];
 
-              return StreamBuilder<List<Concept>>(
-                stream: database.watchAllConcepts(),
-                builder: (context, conceptSnapshot) {
-                  final concepts = conceptSnapshot.data ?? [];
+              return StreamBuilder<List<Flashcard>>(
+                stream: database.watchAllFlashcards(),
+                builder: (context, cardSnapshot) {
+                  final cards = cardSnapshot.data ?? [];
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 20,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(context, ref, profile),
-                        const SizedBox(height: 28),
-                        const Text(
-                          'Learning Progress',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildLearningProgressGrid(notes, concepts),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
+                  return StreamBuilder<List<StudyNote>>(
+                    stream: database.watchAllStudyNotes(),
+                    builder: (context, studyNoteSnapshot) {
+                      final studyNotes = studyNoteSnapshot.data ?? [];
+
+                      return StreamBuilder<List<QuizSession>>(
+                        stream: database.watchAllQuizSessions(),
+                        builder: (context, quizSnapshot) {
+                          final quizzes = quizSnapshot.data ?? [];
+
+                          return SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 20,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildHeader(context, ref, profile),
+                                const SizedBox(height: 28),
+                                const Text(
+                                  'Learning Progress',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _buildLearningProgressGrid(
+                                  notesCount: notes.length,
+                                  cardsCount: cards.length,
+                                  studyNotesCount: studyNotes.length,
+                                  quizzesCount: quizzes.length,
+                                ),
+                                const SizedBox(height: 24),
+                                const Text(
+                                  'Quick Navigation',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _buildNavigationTile(
+                                  context: context,
+                                  title: 'Study & Revision Center',
+                                  subtitle:
+                                      'Spaced repetition flashcards & quizzes',
+                                  icon: Iconsax.card,
+                                  onTap: () => context.push('/study'),
+                                ),
+                                const SizedBox(height: 10),
+                                _buildNavigationTile(
+                                  context: context,
+                                  title: 'Study Notes & Bookmarks',
+                                  subtitle:
+                                      'Saved passages, AI answers, and notes',
+                                  icon: Iconsax.note_favorite,
+                                  onTap: () => context.push('/study/notes'),
+                                ),
+                                const SizedBox(height: 10),
+                                _buildNavigationTile(
+                                  context: context,
+                                  title: 'Quiz History',
+                                  subtitle: 'Past test scores & answer reviews',
+                                  icon: Iconsax.award,
+                                  onTap: () => context.push('/study/history'),
+                                ),
+                                const SizedBox(height: 10),
+                                _buildNavigationTile(
+                                  context: context,
+                                  title: 'Settings & Privacy',
+                                  subtitle:
+                                      'Theme, Gemini API key, storage management',
+                                  icon: Iconsax.setting_2,
+                                  onTap: () => context.push('/settings'),
+                                ),
+                                const SizedBox(height: 40),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
                   );
                 },
               );
@@ -261,7 +323,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   child: CircleAvatar(
-                    radius: 60,
+                    radius: 54,
                     backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                     backgroundImage: profile?.imagePath != null
                         ? FileImage(File(profile!.imagePath!))
@@ -269,7 +331,7 @@ class ProfileScreen extends ConsumerWidget {
                     child: profile?.imagePath == null
                         ? const Icon(
                             Iconsax.user,
-                            size: 50,
+                            size: 46,
                             color: AppColors.primary,
                           )
                         : null,
@@ -289,7 +351,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     child: const Icon(
                       Iconsax.camera,
-                      size: 20,
+                      size: 18,
                       color: Colors.white,
                     ),
                   ),
@@ -297,7 +359,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -306,8 +368,8 @@ class ProfileScreen extends ConsumerWidget {
                   displayName,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -322,7 +384,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   child: const Icon(
                     Iconsax.edit_2,
-                    size: 18,
+                    size: 16,
                     color: AppColors.primary,
                   ),
                 ),
@@ -330,18 +392,18 @@ class ProfileScreen extends ConsumerWidget {
             ],
           ),
           if (profile?.bio != null && profile!.bio!.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               profile.bio!,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.textSecondary,
-                fontSize: 15,
+                fontSize: 14,
                 height: 1.4,
               ),
             ),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           if (profile?.interests != null && profile!.interests!.isNotEmpty)
             Wrap(
               spacing: 8,
@@ -376,33 +438,105 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLearningProgressGrid(List<Note> notes, List<Concept> concepts) {
-    final topicCount = notes.map((n) => n.category).toSet().length;
-
+  Widget _buildLearningProgressGrid({
+    required int notesCount,
+    required int cardsCount,
+    required int studyNotesCount,
+    required int quizzesCount,
+  }) {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 16,
-      childAspectRatio: 1.6,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.5,
       children: [
         _ProgressCard(
-          label: 'Total Notes',
-          value: notes.length.toString(),
+          label: 'Documents',
+          value: notesCount.toString(),
           icon: Iconsax.document_text,
         ),
         _ProgressCard(
-          label: 'Concepts',
-          value: concepts.length.toString(),
-          icon: Iconsax.status_up,
+          label: 'Flashcards',
+          value: cardsCount.toString(),
+          icon: Iconsax.card,
         ),
         _ProgressCard(
-          label: 'Topics',
-          value: topicCount.toString(),
-          icon: Iconsax.category,
+          label: 'Study Notes',
+          value: studyNotesCount.toString(),
+          icon: Iconsax.note_favorite,
+        ),
+        _ProgressCard(
+          label: 'Quizzes Taken',
+          value: quizzesCount.toString(),
+          icon: Iconsax.award,
         ),
       ],
+    );
+  }
+
+  Widget _buildNavigationTile({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.colorScheme.outline.withValues(alpha: 0.14),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Iconsax.arrow_right_3,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -420,27 +554,21 @@ class _ProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+          color: theme.colorScheme.outline.withValues(alpha: 0.14),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, color: AppColors.primary, size: 22),
+          Icon(icon, color: AppColors.primary, size: 20),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -448,15 +576,14 @@ class _ProgressCard extends StatelessWidget {
                 value,
                 style: const TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],

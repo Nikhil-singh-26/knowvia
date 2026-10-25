@@ -1,127 +1,132 @@
 # Know Via 🧠📄
-### AI-Powered Document Q&A & Knowledge Mastery Platform
+### Local-First Document Learning, Spaced Repetition & Revision Suite
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Gemini AI](https://img.shields.io/badge/Google%20Gemini-Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
-[![SQLite / Drift](https://img.shields.io/badge/Local%20Database-Drift%20SQLite-003B57?logo=sqlite&logoColor=white)](https://drift.simonbinder.eu/)
+[![Gemini AI](https://img.shields.io/badge/Google%20Gemini-2.5%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
+[![SQLite / Drift](https://img.shields.io/badge/Local%20Database-Drift%20SQLite%20(v8)-003B57?logo=sqlite&logoColor=white)](https://drift.simonbinder.eu/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## 🌟 Why I Built Know Via
+## 🌟 Overview
 
-Welcome! I created **Know Via** out of a real problem I faced daily: we collect so many PDFs, research articles, lecture slides, code snippets, and meeting notes, yet searching through them and extracting actionable answers is tedious and time-consuming.
+I built **Know Via** to solve a fundamental problem in modern self-directed learning: we collect numerous PDFs, research articles, lecture slides, code snippets, and study materials, but reading them once rarely leads to long-term retention.
 
-I wanted to build an intelligent, offline-capable mobile and desktop assistant where I can simply upload documents and immediately chat with them. Instead of skimming through pages, I can ask natural-language questions, listen to answers, generate active-recall flashcards, take quizzes, and even view an interconnected concept map of everything I have learned.
-
----
-
-## ✨ Features I Built
-
-### 1. 🤖 Document-Grounded AI Q&A
-* **Multi-Turn Chat with Documents**: I integrated Google Gemini (`gemini-3.6-flash`) to provide context-aware, accurate answers grounded exclusively in the content of uploaded documents.
-* **Smart Source Citations**: Answers reference facts directly from the files to prevent hallucinations.
-* **Suggested Inquiries**: When opening a document, the app automatically suggests 4 relevant, high-value questions to jumpstart analysis.
-* **Global & Document-Specific Q&A**: Ask questions about a single file or ask overarching questions across an entire library of documents simultaneously.
-
-### 2. 🎙️ Voice Input & Hands-Free Interaction
-* Integrated real-time speech-to-text (`speech_to_text`) so I can speak my questions naturally instead of typing on mobile.
-* Clean visual microphone feedback with automatic audio transcription directly into the query input.
-
-### 3. 📂 Universal Document & File Ingestion
-* **Broad Format Support**: Seamlessly import PDFs (`.pdf`), Word documents (`.doc`, `.docx`, `.rtf`), plain text (`.txt`, `.md`), data files (`.csv`, `.json`, `.log`), and high-res images (`.png`, `.jpg`, `.webp`).
-* **Visual Document Extraction**: Integrated image capture from camera and gallery with image cropping (`image_cropper`) for digitizing physical paperwork.
-
-### 4. 🧠 Active Recall & Study Suite
-* **Instant Summaries**: Automatically generates concise, structured Markdown summaries with key takeaways and bullet points.
-* **Interactive Flashcard Generator**: Turns any document into an active-recall deck with animated flip cards and review stats.
-* **Knowledge Check Quizzes**: Automatically constructs multiple-choice quizzes with scoring and rationales to test comprehension.
-* **Concept Network Graph**: Extracts core topics and links related ideas into a visual knowledge graph.
-
-### 5. 🔍 Semantic & Keyword Search
-* **Hybrid Search**: Combines instant local keyword filtering with AI-powered semantic search that understands the meaning behind queries rather than just exact string matches.
-* **Categorization**: Filter documents and notes by custom tags such as Research, Programming, Academic, Business, Legal, and Personal.
-
-### 6. ⚡ Offline-First Architecture & Privacy
-* Built on **Drift** (type-safe SQLite for Flutter) so all documents, metadata, notes, and past Q&A history are stored locally on device.
-* Real-time network detection via `connectivity_plus` with graceful offline fallback banners when internet connectivity is lost.
-* Full Dark Mode, Light Mode, and System Theme support with persistent state saving using `shared_preferences`.
+**Know Via** is a local-first document learning and knowledge management application designed for active recall. Rather than acting as just a PDF reader with an attached chatbot, Know Via turns imported study materials into a personalized revision ecosystem:
+- Grounded multi-turn conversational AI directly answered from source text.
+- Deterministic SuperMemo-2 (SM-2) spaced-repetition flashcards.
+- Multiple-choice quizzes with answer explanations and mistake reviews.
+- Persistent study notes, saved excerpts, and bookmarks.
+- Privacy-first local SQLite storage where all documents and study progress remain exclusively on your device.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## ✨ Core Features
 
-I architected Know Via using clean architecture principles and modern Flutter patterns:
+### 1. 📚 Study & Revision Center (Active Recall)
+* **Deterministic SM-2 Spaced Repetition**: Flashcards follow the classic SuperMemo-2 algorithm with interval modifiers and ease factors calculated from user ratings (**Again**, **Hard**, **Good**, **Easy**).
+* **Interactive 3D Flip Cards**: Smooth card flip animations with question/answer previews, immediate deck progress tracking, and session summaries.
+* **Deck Management**: Create custom flashcards manually or generate them directly from any imported document with an editable preview sheet before saving.
+* **Knowledge Check Quizzes**: Generate or create multiple-choice quizzes with 4 options and detailed explanations. Features question navigation, scoring, review of incorrect answers, and persistent attempt history.
+* **Real Study Metrics**: The revision dashboard displays real data from SQLite: cards due today, cards reviewed, quiz attempts and average scores, and weak topics identified from actual mistakes.
+* **Study Notes & Bookmarks**: Save important passages, AI answers, or custom thoughts. Tag notes, pin favorites, and export them directly via system share sheets.
 
-| Layer | Technologies Used |
+### 2. 🤖 Source-Grounded Document AI
+* **Grounded Q&A**: Uses official Google Gemini models (`gemini-2.5-flash`, `gemini-1.5-flash`, `gemini-1.5-pro`) to provide context-aware answers derived from the active document.
+* **Suggested Questions**: Contextual prompts to immediately explore key concepts in any newly imported file.
+* **Offline Transparency**: Clearly distinguishes local offline document reading from AI actions requiring internet connectivity.
+* **Custom API Key Support**: Configure your personal Google AI Studio API key directly inside Settings. Keys are stored safely in local preferences rather than hardcoded in release binaries.
+
+### 3. 📂 Document Library & Ingestion
+* **Universal Format Support**: Import PDFs (`.pdf`), text files (`.txt`, `.md`), data documents (`.csv`, `.json`), and images (`.png`, `.jpg`).
+* **Document Management**: Search documents by title or content, sort by date/title/category, rename titles, and delete documents with automatic cascading cleanup of related flashcards and notes.
+* **Offline Document Viewer**: Full document reader with markdown rendering, word count, metadata, and attachment management.
+
+### 4. 🎙️ Voice Input & Hands-Free Interaction
+* Integrated real-time speech-to-text (`speech_to_text`) allowing natural speech input for document inquiries.
+
+### 5. 🔍 Fast Search & Organization
+* Instant on-device keyword search across document titles, text bodies, categories, and study notes.
+* Recent search query history with tap-to-reapply filters.
+
+### 6. 🛡️ Local-First Privacy Architecture
+* Powered by **Drift (SQLite)**: all documents, study notes, flashcards, schedules, and quiz histories persist locally across app restarts.
+* Document data is never uploaded to any third-party cloud database. Content is only sent to Google Gemini over encrypted HTTPS when you explicitly trigger an AI query, summary, flashcard generator, or quiz.
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology |
 |---|---|
-| **Framework** | [Flutter](https://flutter.dev) (Dart 3) |
+| **Framework** | [Flutter 3.x](https://flutter.dev) (Dart 3) |
 | **State Management** | [Flutter Riverpod](https://riverpod.dev) |
-| **Navigation & Routing** | [GoRouter](https://pub.dev/packages/go_router) with StatefulShellRoute |
-| **Local Database** | [Drift](https://drift.simonbinder.eu/) + [SQLite](https://sqlite.org/) |
-| **AI Engine** | [Google Gemini REST API](https://ai.google.dev/) (`gemini-3.6-flash`) |
+| **Navigation** | [GoRouter](https://pub.dev/packages/go_router) with 5 StatefulShellBranches |
+| **Local Database** | [Drift](https://drift.simonbinder.eu/) (Schema Version 8) + SQLite |
+| **AI Integration** | [Google Gemini REST API](https://ai.google.dev/) (`gemini-2.5-flash`) |
+| **Spaced Repetition** | Deterministic SuperMemo-2 (SM-2) algorithm |
+| **File & Media** | [FilePicker](https://pub.dev/packages/file_picker), [ImagePicker](https://pub.dev/packages/image_picker), [SharePlus](https://pub.dev/packages/share_plus) |
 | **Voice Processing** | [Speech to Text](https://pub.dev/packages/speech_to_text) |
-| **File & Media Handling** | [FilePicker](https://pub.dev/packages/file_picker), [ImagePicker](https://pub.dev/packages/image_picker), [ImageCropper](https://pub.dev/packages/image_cropper) |
-| **UI & Styling** | Material 3, [Google Fonts (Inter)](https://fonts.google.com/specimen/Inter), [Iconsax](https://pub.dev/packages/iconsax), [Flutter Markdown Plus](https://pub.dev/packages/flutter_markdown_plus) |
-| **Branding & Assets** | [flutter_launcher_icons](https://pub.dev/packages/flutter_launcher_icons), [flutter_native_splash](https://pub.dev/packages/flutter_native_splash) |
+| **Design System** | Material 3, [Iconsax](https://pub.dev/packages/iconsax), [Flutter Markdown Plus](https://pub.dev/packages/flutter_markdown_plus) |
 
 ---
 
-## 📁 Project Structure
-
-Here is how I structured the codebase for maximum readability and maintainability:
+## 📁 Project Architecture
 
 ```text
 know_via/
 ├── assets/
 │   └── images/
-│       └── logo.png              # Primary application branding & launcher icon
+│       └── logo.png                  # Application branding & launcher icon
 ├── lib/
 │   ├── app/
-│   │   ├── app.dart              # Main application widget & theme configuration
-│   │   ├── router.dart           # GoRouter declarations & tab navigation shell
-│   │   └── theme/
-│   │       ├── app_colors.dart   # Design token color palette
-│   │       ├── app_theme.dart    # Light & dark theme specifications
-│   │       └── app_typography.dart # Google Fonts typography hierarchy
+│   │   ├── app.dart                  # Root MaterialApp, Riverpod provider & theme config
+│   │   ├── router.dart               # GoRouter with 5 primary tabs (Home, Library, Study, AI Q&A, Profile)
+│   │   └── theme/                    # Color palette, Material 3 theme & typography
 │   ├── core/
 │   │   ├── ai/
-│   │   │   ├── ai_config.dart    # Gemini API configuration & endpoints
-│   │   │   ├── ai_provider.dart  # Riverpod provider for AI service
-│   │   │   ├── concept_service.dart # Concept extraction & relationship mapper
-│   │   │   └── gemini_service.dart  # Complete Gemini prompt & API client
+│   │   │   ├── ai_config.dart        # Official Gemini model IDs & custom API key manager
+│   │   │   ├── ai_provider.dart      # Riverpod provider for AI service
+│   │   │   └── gemini_service.dart   # Document-grounded prompts & resilient JSON parser
 │   │   ├── database/
-│   │   │   ├── database.dart     # Drift SQLite database tables, queries & migrations
-│   │   │   └── database.g.dart   # Generated Drift code
+│   │   │   ├── database.dart         # Drift SQLite tables: Notes, Flashcards, StudyNotes, QuizSessions
+│   │   │   └── database.g.dart       # Drift generated database code (Schema v8)
 │   │   ├── theme/
-│   │   │   └── theme_controller.dart # Theme persistence (Light/Dark/System)
+│   │   │   └── theme_controller.dart # Light/Dark/System theme persistence
 │   │   └── utils/
-│   │       ├── attachment_helper.dart # Attachment path encoding & decoding
-│   │       ├── connectivity_service.dart # Real-time online/offline monitoring
-│   │       └── media_picker_helper.dart # File, camera, and gallery pickers
+│   │       ├── attachment_helper.dart# Dual pipe/JSON attachment parser
+│   │       ├── connectivity_service.dart # Real-time connectivity monitor
+│   │       └── media_picker_helper.dart  # Multi-format document picker
 │   ├── features/
-│   │   ├── home/                 # Dashboard with document stats and recent uploads
-│   │   ├── map/                  # Knowledge concept visualizer & detail views
-│   │   ├── notes/                # Document creation, ingestion, and detail view
-│   │   ├── profile/              # User profile & learning metrics
-│   │   ├── qa/                   # Interactive Document Q&A screen
-│   │   ├── search/               # Semantic & keyword search screen
-│   │   └── settings/             # Theme selector and app information
-│   └── main.dart                 # Application entry point with environment initialization
-├── test/                         # Unit tests and widget tests
-└── pubspec.yaml                  # Dependencies and platform configurations
+│   │   ├── home/                     # Home dashboard with due revisions, quick actions & stats
+│   │   ├── notes/                    # Document library, import pipeline, reader & AI toolbar
+│   │   ├── profile/                  # User profile, learning stats (docs, cards, quizzes, notes)
+│   │   ├── qa/                       # Interactive multi-turn document Q&A screen
+│   │   ├── search/                   # Local keyword search across documents & history
+│   │   ├── settings/                 # Theme switch, Gemini API key, storage management & privacy
+│   │   └── study/                    # Study & Revision Center:
+│   │       ├── domain/models/
+│   │       │   └── spaced_repetition.dart # SM-2 deterministic algorithm
+│   │       └── presentation/screens/
+│   │           ├── flashcard_deck_screen.dart   # Card deck manager & manual editor
+│   │           ├── flashcard_study_screen.dart  # 3D animated flip card review runner
+│   │           ├── quiz_history_screen.dart     # Past quiz attempts & answer review
+│   │           ├── quiz_runner_screen.dart      # Interactive MCQ quiz runner
+│   │           ├── study_dashboard_screen.dart  # Main revision hub & learning stats
+│   │           └── study_notes_screen.dart      # Tagged study notes & bookmark manager
+│   └── main.dart                     # App initialization (SharedPreferences, AiConfig, Riverpod)
+└── test/                             # Automated unit, database, SM-2, and widget tests
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-Follow these steps to run Know Via locally on your machine:
-
 ### 1. Prerequisites
-* [Flutter SDK](https://docs.flutter.dev/get-started/install) (version 3.12+ recommended)
-* A valid [Google Gemini API Key](https://aistudio.google.com/app/apikey)
+* [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.12+ (Dart 3+)
+* Android Studio / Xcode / VS Code
+* An active [Google AI Studio API Key](https://aistudio.google.com/app/apikey)
 
 ### 2. Clone the Repository
 ```bash
@@ -129,60 +134,49 @@ git clone https://github.com/Nikhil-singh-26/knowvia.git
 cd knowvia
 ```
 
-### 3. Configure the Environment
-Create a `.env` file in the project root directory and add your Gemini API key:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-> **Note:** `.env` is already configured in `.gitignore` to keep your credentials safe.
-
-### 4. Install Dependencies
+### 3. Install Dependencies
 ```bash
 flutter pub get
 ```
 
-### 5. Generate Code (Optional)
-If you modify Drift database tables:
-```bash
-dart run build_runner build --delete-conflicting-outputs
-```
+### 4. Configure Your API Key
+You can configure your Gemini API Key in two ways:
+- **In-App (Recommended for users)**: Open the app, navigate to **Profile > Settings > Gemini AI Configuration**, and paste your API key. It is saved in local device storage.
+- **Environment File (for development)**: Create a `.env` file in the project root:
+  ```env
+  GEMINI_API_KEY=AIzaSy...your_key_here
+  ```
 
-### 6. Generate Launcher Icons & Splash Screens
-To regenerate icons and native splash screens from `assets/images/logo.png`:
+### 5. Build & Test Commands
 ```bash
-dart run flutter_launcher_icons
-dart run flutter_native_splash:create
-```
+# Run code analysis
+flutter analyze
 
-### 7. Run the App
-Launch on your connected device, emulator, or desktop:
-```bash
-# Run on Android/iOS/Desktop/Chrome
-flutter run
-```
-
-To run automated tests:
-```bash
+# Run unit and widget tests
 flutter test
+
+# Run the app locally
+flutter run
+
+# Build release Android App Bundle
+flutter build appbundle --release
 ```
 
 ---
 
-## 🎨 Branding & Icons
+## 🔐 Security & Privacy Summary
 
-I designed the app icon using `assets/images/logo.png`. The launcher icons and splash screens are automatically generated across all supported platforms:
-* **Android**: Adaptive mipmap icons + Android 12 splash screen
-* **iOS**: AppIcon asset catalog + LaunchImage
-* **Web**: Favicon and progressive web app icons (192px, 512px, maskable)
-* **Windows**: Native `.ico` application icon
-* **macOS**: Full `.appiconset` suite
+1. **No Backend Transmission of Files**: Documents and study notes are stored purely in your local device SQLite database.
+2. **Encrypted AI Calls**: When asking questions or generating flashcards, the relevant excerpt is transmitted directly over HTTPS to Google's official Gemini endpoint. No intermediary proxy or tracking server is used.
+3. **No Embedded Production Secrets**: API keys are not hardcoded in source control. Users supply their own AI Studio key or use a local `.env` during development.
+4. **Data Management**: Complete control over your data. Under Settings, users can individually reset study progress (flashcards, notes, quizzes) or perform a complete data erasure.
 
 ---
 
-## 🛡️ License
+## ⚠️ Known Limitations
 
-This project is licensed under the MIT License - feel free to use and adapt it for your own personal and commercial projects.
+- **Complex Scanned PDFs**: Extraction relies on extractable digital text streams. Non-OCR scanned image PDFs require an external OCR pre-pass or camera snapshot.
+- **Offline AI Processing**: While document reading, note-taking, flashcard review, and quiz taking are completely offline, generative AI summaries, flashcard generation, and document Q&A require an active internet connection to communicate with Google Gemini.
 
 ---
 

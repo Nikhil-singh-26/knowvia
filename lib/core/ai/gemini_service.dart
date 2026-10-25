@@ -63,7 +63,8 @@ class GeminiService {
         } catch (_) {}
 
         if (response.statusCode == 404) {
-          errorMsg = 'AI model or version unavailable. Please check configuration.';
+          errorMsg =
+              'AI model or version unavailable. Please check configuration.';
         } else if (response.statusCode == 401 || response.statusCode == 403) {
           errorMsg = 'AI authorization failed. Please check your API key.';
         } else if (response.statusCode == 429) {
@@ -386,9 +387,7 @@ Example: ["id1", "id2"]
           ],
         },
       ],
-      'generationConfig': {
-        'temperature': 0.1,
-      },
+      'generationConfig': {'temperature': 0.1},
     };
 
     try {
@@ -437,7 +436,8 @@ Example: ["id1", "id2"]
       }
     }
 
-    final prompt = '''
+    final prompt =
+        '''
 You are Know Via AI, an intelligent document analysis assistant. Answer the user's question accurately, concisely, and insightfully based on the provided document.
 
 Document Title: $documentTitle
@@ -477,7 +477,8 @@ Instructions:
           ? '${content.substring(0, 2500)}...[truncated]'
           : content;
       docsBuffer.writeln(
-          '--- Document [ID: ${doc['id'] ?? i}]: "$title" (Category: $category) ---');
+        '--- Document [ID: ${doc['id'] ?? i}]: "$title" (Category: $category) ---',
+      );
       docsBuffer.writeln(snippet);
       docsBuffer.writeln();
     }
@@ -495,7 +496,8 @@ Instructions:
       }
     }
 
-    final prompt = '''
+    final prompt =
+        '''
 You are Know Via AI, an intelligent multi-document assistant. Answer the user's question across their knowledge base of documents.
 
 Available Documents:
@@ -517,7 +519,8 @@ Instructions:
   }
 
   Future<List<String>> suggestDocumentQuestions(String content) async {
-    final prompt = '''
+    final prompt =
+        '''
 Based on this document content, suggest 4 insightful and useful questions a user or student might ask about it.
 Content:
 """

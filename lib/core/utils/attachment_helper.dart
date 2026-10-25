@@ -23,4 +23,3 @@ class AttachmentHelper {
     return value.split('|').where((s) => s.isNotEmpty).toList();
   }
 }
-

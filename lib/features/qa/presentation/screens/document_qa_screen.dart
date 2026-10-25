@@ -115,10 +115,9 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
         );
 
         final pastQas = await db.getQasForDocument(currentDoc.id);
-        final history = pastQas.map((q) => {
-          'question': q.question,
-          'answer': q.answer,
-        }).toList();
+        final history = pastQas
+            .map((q) => {'question': q.question, 'answer': q.answer})
+            .toList();
 
         answer = await gemini.askDocumentQuestion(
           documentTitle: currentDoc.title,
@@ -134,19 +133,22 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
         );
       } else {
         // Global search across all documents
-        final docsData = allDocs.map((d) => {
-          'id': d.id,
-          'title': d.title,
-          'category': d.category,
-          'content': d.content,
-        }).toList();
+        final docsData = allDocs
+            .map(
+              (d) => {
+                'id': d.id,
+                'title': d.title,
+                'category': d.category,
+                'content': d.content,
+              },
+            )
+            .toList();
 
         final pastQas = await db.getQasForDocument(null);
 
-        final history = pastQas.map((q) => {
-          'question': q.question,
-          'answer': q.answer,
-        }).toList();
+        final history = pastQas
+            .map((q) => {'question': q.question, 'answer': q.answer})
+            .toList();
 
         answer = await gemini.askGlobalQuestion(
           documents: docsData,
@@ -154,19 +156,15 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
           history: history,
         );
 
-        await db.insertQa(
-          documentId: null,
-          question: query,
-          answer: answer,
-        );
+        await db.insertQa(documentId: null, question: query, answer: answer);
       }
 
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Q&A Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Q&A Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -190,7 +188,9 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Clear Q&A History?'),
-        content: const Text('This will delete all saved questions and answers for this session.'),
+        content: const Text(
+          'This will delete all saved questions and answers for this session.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
@@ -208,9 +208,9 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
       final db = ref.read(databaseProvider);
       await db.clearQasForDocument(_selectedDocumentId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Q&A history cleared')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Q&A history cleared')));
       }
     }
   }
@@ -270,7 +270,10 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
 
                     return ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       itemCount: qas.length + (_isLoading ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index == qas.length) {
@@ -318,7 +321,8 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
-                value: _selectedDocumentId != null &&
+                value:
+                    _selectedDocumentId != null &&
                         allDocs.any((d) => d.id == _selectedDocumentId)
                     ? _selectedDocumentId
                     : null,
@@ -377,7 +381,11 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Iconsax.document_upload, size: 48, color: AppColors.primary),
+              child: const Icon(
+                Iconsax.document_upload,
+                size: 48,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 18),
             const Text(
@@ -427,7 +435,11 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Iconsax.magic_star, color: AppColors.primary, size: 36),
+              child: const Icon(
+                Iconsax.magic_star,
+                color: AppColors.primary,
+                size: 36,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -457,11 +469,17 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
             runSpacing: 10,
             children: _suggestedQuestions.map((q) {
               return ActionChip(
-                avatar: const Icon(Iconsax.message_question, size: 16, color: AppColors.primary),
+                avatar: const Icon(
+                  Iconsax.message_question,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
                 label: Text(q, style: const TextStyle(fontSize: 13)),
                 backgroundColor: Theme.of(context).colorScheme.surface,
                 side: BorderSide(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.2),
                 ),
                 onPressed: () => _submitQuestion(q, allDocs),
               );
@@ -614,7 +632,9 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
                     DateFormat('MMM d, h:mm a').format(qa.createdAt),
                     style: TextStyle(
                       fontSize: 11,
-                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.6,
+                      ),
                     ),
                   ),
                 ],
@@ -636,7 +656,9 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+            color: Theme.of(
+              context,
+            ).colorScheme.outline.withValues(alpha: 0.15),
           ),
         ),
         child: const Row(
@@ -662,7 +684,12 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
     final theme = Theme.of(context);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 10, 16, MediaQuery.of(context).padding.bottom + 10),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        10,
+        16,
+        MediaQuery.of(context).padding.bottom + 10,
+      ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -692,8 +719,13 @@ class _DocumentQaScreenState extends ConsumerState<DocumentQaScreen> {
                 hintText: 'Ask a question about documents...',
                 hintStyle: const TextStyle(fontSize: 14),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.4,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,

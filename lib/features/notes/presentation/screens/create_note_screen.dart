@@ -91,8 +91,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       final nameWithoutExt = filename.contains('.')
           ? filename.substring(0, filename.lastIndexOf('.'))
           : filename;
-      titleController.text =
-          nameWithoutExt.replaceAll('_', ' ').replaceAll('-', ' ');
+      titleController.text = nameWithoutExt
+          .replaceAll('_', ' ')
+          .replaceAll('-', ' ');
     }
 
     if (['txt', 'md', 'csv', 'json', 'log'].contains(ext)) {
@@ -138,8 +139,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       } else if (ext == 'doc' || ext == 'docx') {
         try {
           final binaryStr = String.fromCharCodes(bytes);
-          final matches =
-              RegExp(r'<w:t[^>]*>(.*?)</w:t>').allMatches(binaryStr);
+          final matches = RegExp(
+            r'<w:t[^>]*>(.*?)</w:t>',
+          ).allMatches(binaryStr);
           if (matches.isNotEmpty) {
             final buffer = StringBuffer();
             for (final m in matches) {
@@ -177,9 +179,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Document extraction note: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Document extraction note: $e')));
       }
     } finally {
       if (mounted) {
@@ -194,8 +196,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
   Future<void> _showMetadataSuggestion(String content) async {
     if (!_isOnline() || content.trim().isEmpty) return;
     try {
-      final result =
-          await ref.read(geminiServiceProvider).suggestMetadata(content);
+      final result = await ref
+          .read(geminiServiceProvider)
+          .suggestMetadata(content);
       final data = jsonDecode(result) as Map<String, dynamic>;
 
       if (titleController.text.isEmpty && data['title'] != null) {
@@ -233,7 +236,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
     final ext = path.path.split('.').last.toLowerCase();
     setState(() {
       _attachments.add(path);
-      _sourceType = ext == 'pdf' ? 'pdf' : (['doc', 'docx'].contains(ext) ? 'doc' : 'file');
+      _sourceType = ext == 'pdf'
+          ? 'pdf'
+          : (['doc', 'docx'].contains(ext) ? 'doc' : 'file');
     });
     await _extractFromFile(path);
   }
@@ -248,15 +253,15 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       _sourceType = 'text';
       await _showMetadataSuggestion(contentController.text);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pasted from clipboard')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Pasted from clipboard')));
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clipboard is empty')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Clipboard is empty')));
       }
     }
   }
@@ -298,7 +303,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
 
     if (content.isEmpty && _attachments.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add document content or attach a file')),
+        const SnackBar(
+          content: Text('Please add document content or attach a file'),
+        ),
       );
       return;
     }
@@ -316,29 +323,39 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       String? summary;
       if (_isOnline() && content.isNotEmpty) {
         try {
-          final analysis = await ref.read(geminiServiceProvider).analyzeNote(
-            title: title,
-            content: content,
-            category: selectedCategory,
-          );
+          final analysis = await ref
+              .read(geminiServiceProvider)
+              .analyzeNote(
+                title: title,
+                content: content,
+                category: selectedCategory,
+              );
           final parsed = jsonDecode(analysis) as Map<String, dynamic>;
           summary = parsed['summary']?.toString();
         } catch (_) {}
       }
 
-      await database.into(database.notes).insert(
-        NotesCompanion(
-          id: drift.Value(docId),
-          title: drift.Value(title),
-          content: drift.Value(content.isEmpty ? 'File attachment: $title' : content),
-          category: drift.Value(selectedCategory),
-          createdAt: drift.Value(now),
-          updatedAt: drift.Value(now),
-          sourceType: drift.Value(_sourceType),
-          attachmentPaths: drift.Value(AttachmentHelper.encode(_attachments)),
-          aiSummary: summary != null ? drift.Value(summary) : const drift.Value.absent(),
-        ),
-      );
+      await database
+          .into(database.notes)
+          .insert(
+            NotesCompanion(
+              id: drift.Value(docId),
+              title: drift.Value(title),
+              content: drift.Value(
+                content.isEmpty ? 'File attachment: $title' : content,
+              ),
+              category: drift.Value(selectedCategory),
+              createdAt: drift.Value(now),
+              updatedAt: drift.Value(now),
+              sourceType: drift.Value(_sourceType),
+              attachmentPaths: drift.Value(
+                AttachmentHelper.encode(_attachments),
+              ),
+              aiSummary: summary != null
+                  ? drift.Value(summary)
+                  : const drift.Value.absent(),
+            ),
+          );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -355,9 +372,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving document: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error saving document: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -455,7 +472,8 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                 return ChoiceChip(
                   label: Text(category),
                   selected: selectedCategory == category,
-                  onSelected: (_) => setState(() => selectedCategory = category),
+                  onSelected: (_) =>
+                      setState(() => selectedCategory = category),
                 );
               }).toList(),
             ),
@@ -496,7 +514,10 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                 _loadingMessage.isNotEmpty
                     ? _loadingMessage
                     : 'AI is processing...',
-                style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ],
 
@@ -513,8 +534,12 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                 final fname = file.path.split(Platform.pathSeparator).last;
                 final ext = fname.split('.').last.toLowerCase();
                 IconData fileIcon = Iconsax.document;
-                if (ext == 'pdf') fileIcon = Iconsax.document_favorite;
-                if (['jpg', 'png', 'jpeg'].contains(ext)) fileIcon = Iconsax.gallery;
+                if (ext == 'pdf') {
+                  fileIcon = Iconsax.document_favorite;
+                }
+                if (['jpg', 'png', 'jpeg'].contains(ext)) {
+                  fileIcon = Iconsax.gallery;
+                }
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -524,11 +549,17 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                       fname,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     subtitle: Text('${ext.toUpperCase()} file'),
                     trailing: IconButton(
-                      icon: const Icon(Iconsax.close_circle, color: Colors.redAccent),
+                      icon: const Icon(
+                        Iconsax.close_circle,
+                        color: Colors.redAccent,
+                      ),
                       onPressed: () {
                         setState(() => _attachments.remove(file));
                       },
