@@ -117,6 +117,14 @@ class FlashcardReviews extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
+class DocumentQas extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get documentId => text().nullable()();
+  TextColumn get question => text()();
+  TextColumn get answer => text()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 @DriftDatabase(
   tables: [
     Notes,
@@ -128,6 +136,7 @@ class FlashcardReviews extends Table {
     SearchHistory,
     QuizSessions,
     FlashcardReviews,
+    DocumentQas,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -135,7 +144,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.memory() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -166,6 +175,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.createTable(quizSessions);
         await m.createTable(flashcardReviews);
+      }
+      if (from < 7) {
+        await m.createTable(documentQas);
       }
     },
   );
@@ -337,6 +349,80 @@ class AppDatabase extends _$AppDatabase {
     ])..where(conceptRelations.fromConceptId.equals(conceptId));
     final rows = await query.get();
     return rows.map((row) => row.readTable(concepts)).toList();
+  }
+
+  // Document Q&A Queries
+  Future<List<DocumentQa>> getQasForDocument(String? documentId) {
+    if (documentId == null) {
+      return (select(documentQas)
+            ..where((tbl) => tbl.documentId.isNull())
+            ..orderBy([
+              (t) =>
+                  OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+            ]))
+          .get();
+    }
+    return (select(documentQas)
+          ..where((tbl) => tbl.documentId.equals(documentId))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+          ]))
+        .get();
+  }
+
+  Stream<List<DocumentQa>> watchQasForDocument(String? documentId) {
+    if (documentId == null) {
+      return (select(documentQas)
+            ..where((tbl) => tbl.documentId.isNull())
+            ..orderBy([
+              (t) =>
+                  OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+            ]))
+          .watch();
+    }
+    return (select(documentQas)
+          ..where((tbl) => tbl.documentId.equals(documentId))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)
+          ]))
+        .watch();
+  }
+
+  Stream<List<DocumentQa>> watchAllQas() {
+    return (select(documentQas)
+          ..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)
+          ]))
+        .watch();
+  }
+
+  Future<int> insertQa({
+    String? documentId,
+    required String question,
+    required String answer,
+  }) {
+    return into(documentQas).insert(
+      DocumentQasCompanion.insert(
+        documentId: Value(documentId),
+        question: question,
+        answer: answer,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> deleteQa(int id) {
+    return (delete(documentQas)..where((tbl) => tbl.id.equals(id))).go();
+  }
+
+  Future<void> clearQasForDocument(String? documentId) {
+    if (documentId == null) {
+      return (delete(documentQas)..where((tbl) => tbl.documentId.isNull())).go();
+    }
+    return (delete(documentQas)
+          ..where((tbl) => tbl.documentId.equals(documentId)))
+        .go();
   }
 }
 

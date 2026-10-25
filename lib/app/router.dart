@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iconsax/iconsax.dart';
 import '../core/theme/theme_controller.dart';
 import '../features/home/presentation/screens/home_screen.dart';
-import '../features/map/presentation/screens/map_screen.dart';
+import '../features/qa/presentation/screens/document_qa_screen.dart';
 import '../features/search/presentation/screens/search_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/notes/presentation/screens/create_note_screen.dart';
+import '../features/notes/presentation/screens/notes_screen.dart';
 
 final ThemeController themeController = ThemeController();
 
@@ -29,8 +31,15 @@ final GoRouter appRouter = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: '/qa',
+              builder: (context, state) {
+                final docId = state.uri.queryParameters['docId'];
+                return DocumentQaScreen(initialDocumentId: docId);
+              },
+            ),
+            GoRoute(
               path: '/map',
-              builder: (context, state) => const MapScreen(),
+              redirect: (context, state) => '/qa',
             ),
           ],
         ),
@@ -53,7 +62,19 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
+      path: '/notes',
+      builder: (context, state) => const NotesScreen(),
+    ),
+    GoRoute(
+      path: '/documents',
+      builder: (context, state) => const NotesScreen(),
+    ),
+    GoRoute(
       path: '/notes/create',
+      builder: (context, state) => const CreateNoteScreen(),
+    ),
+    GoRoute(
+      path: '/documents/create',
       builder: (context, state) => const CreateNoteScreen(),
     ),
     GoRoute(
@@ -94,9 +115,9 @@ class MainNavigationScreen extends StatelessWidget {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.hub_outlined),
-            selectedIcon: Icon(Icons.hub),
-            label: 'Map',
+            icon: Icon(Iconsax.message_question),
+            selectedIcon: Icon(Iconsax.message_question, color: Colors.deepPurple),
+            label: 'AI Q&A',
           ),
           NavigationDestination(
             icon: Icon(Icons.search_outlined),

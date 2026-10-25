@@ -63,8 +63,7 @@ class GeminiService {
         } catch (_) {}
 
         if (response.statusCode == 404) {
-          errorMsg = 'Gemini 404: ${response.body}';
-              // 'AI model or version unavailable. Please check configuration.';
+          errorMsg = 'AI model or version unavailable. Please check configuration.';
         } else if (response.statusCode == 401 || response.statusCode == 403) {
           errorMsg = 'AI authorization failed. Please check your API key.';
         } else if (response.statusCode == 429) {
@@ -361,6 +360,185 @@ Example: ["id1", "id2"]
       return List<String>.from(jsonDecode(result));
     } catch (_) {
       return [];
+    }
+  }
+
+  Future<String> extractDocumentContent({
+    required List<int> bytes,
+    required String mimeType,
+    String? fileName,
+  }) async {
+    final url = Uri.parse('$baseUrl/$model:generateContent?key=$apiKey');
+    final prompt =
+        'Extract all readable text, titles, headings, tables, bullet points, and contents from this document (${fileName ?? 'document'}). Maintain logical structure, paragraphs, and order accurately. Return ONLY the extracted text content.';
+
+    final body = {
+      'contents': [
+        {
+          'parts': [
+            {'text': prompt},
+            {
+              'inline_data': {
+                'mime_type': mimeType,
+                'data': base64Encode(bytes),
+              },
+            },
+          ],
+        },
+      ],
+      'generationConfig': {
+        'temperature': 0.1,
+      },
+    };
+
+    try {
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (response.statusCode != 200) {
+        throw Exception('AI service error: ${response.statusCode}');
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final text = data['candidates']?[0]['content']?['parts']?[0]['text']
+          ?.toString();
+      return text?.trim() ?? '';
+    } catch (e) {
+      if (e is http.ClientException || e is SocketException) {
+        throw Exception(
+          'Network error: Please check your internet connection.',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> askDocumentQuestion({
+    required String documentTitle,
+    required String documentContent,
+    required String question,
+    List<Map<String, String>> history = const [],
+  }) async {
+    final StringBuffer historyBuffer = StringBuffer();
+    if (history.isNotEmpty) {
+      historyBuffer.writeln('\nPrevious Q&A context:');
+      for (final item in history) {
+        final q = item['question'] ?? '';
+        final a = item['answer'] ?? '';
+        if (q.isNotEmpty && a.isNotEmpty) {
+          historyBuffer.writeln('User: $q');
+          historyBuffer.writeln('AI: $a\n');
+        }
+      }
+    }
+
+    final prompt = '''
+You are Know Via AI, an intelligent document analysis assistant. Answer the user's question accurately, concisely, and insightfully based on the provided document.
+
+Document Title: $documentTitle
+
+Document Content:
+"""
+$documentContent
+"""
+
+${historyBuffer.toString()}
+
+Current Question: $question
+
+Instructions:
+1. Base your answer directly on the document content provided above.
+2. If the document provides facts or numbers answering the question, cite them clearly.
+3. If the answer cannot be found in the document, explicitly mention that the document does not contain this information, while offering any closely related facts found in the text.
+4. Format your response cleanly using Markdown (use bolding, bullet points, numbered lists, or short paragraphs where appropriate).
+5. Return ONLY the answer.
+''';
+
+    return _post('generateContent', prompt, temperature: 0.3, isJson: false);
+  }
+
+  Future<String> askGlobalQuestion({
+    required List<Map<String, String>> documents,
+    required String question,
+    List<Map<String, String>> history = const [],
+  }) async {
+    final StringBuffer docsBuffer = StringBuffer();
+    for (int i = 0; i < documents.length; i++) {
+      final doc = documents[i];
+      final title = doc['title'] ?? 'Document ${i + 1}';
+      final category = doc['category'] ?? 'General';
+      final content = doc['content'] ?? '';
+      final snippet = content.length > 2500
+          ? '${content.substring(0, 2500)}...[truncated]'
+          : content;
+      docsBuffer.writeln(
+          '--- Document [ID: ${doc['id'] ?? i}]: "$title" (Category: $category) ---');
+      docsBuffer.writeln(snippet);
+      docsBuffer.writeln();
+    }
+
+    final StringBuffer historyBuffer = StringBuffer();
+    if (history.isNotEmpty) {
+      historyBuffer.writeln('\nPrevious conversation:');
+      for (final item in history) {
+        final q = item['question'] ?? '';
+        final a = item['answer'] ?? '';
+        if (q.isNotEmpty && a.isNotEmpty) {
+          historyBuffer.writeln('User: $q');
+          historyBuffer.writeln('AI: $a\n');
+        }
+      }
+    }
+
+    final prompt = '''
+You are Know Via AI, an intelligent multi-document assistant. Answer the user's question across their knowledge base of documents.
+
+Available Documents:
+${docsBuffer.toString()}
+
+${historyBuffer.toString()}
+
+User Question: $question
+
+Instructions:
+1. Synthesize insights across the relevant documents.
+2. Explicitly cite which document each key fact comes from (e.g. "**[Doc: Title]**").
+3. If no document contains the answer, clearly state so.
+4. Use clean Markdown formatting with clear bullet points and headers where helpful.
+5. Return ONLY the answer.
+''';
+
+    return _post('generateContent', prompt, temperature: 0.3, isJson: false);
+  }
+
+  Future<List<String>> suggestDocumentQuestions(String content) async {
+    final prompt = '''
+Based on this document content, suggest 4 insightful and useful questions a user or student might ask about it.
+Content:
+"""
+${content.length > 3000 ? content.substring(0, 3000) : content}
+"""
+
+Return ONLY a JSON array of 4 string questions:
+["Question 1", "Question 2", "Question 3", "Question 4"]
+''';
+
+    try {
+      final result = await _post('generateContent', prompt, temperature: 0.4);
+      final list = jsonDecode(result) as List;
+      return list.map((e) => e.toString()).toList();
+    } catch (_) {
+      return [
+        'What are the key points in this document?',
+        'Summarize this document in 3 sentences.',
+        'What are the main conclusions or action items?',
+        'Explain any complex terms mentioned here.',
+      ];
     }
   }
 }

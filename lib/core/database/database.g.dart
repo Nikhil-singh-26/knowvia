@@ -3540,6 +3540,359 @@ class FlashcardReviewsCompanion extends UpdateCompanion<FlashcardReview> {
   }
 }
 
+class $DocumentQasTable extends DocumentQas
+    with TableInfo<$DocumentQasTable, DocumentQa> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DocumentQasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _documentIdMeta = const VerificationMeta(
+    'documentId',
+  );
+  @override
+  late final GeneratedColumn<String> documentId = GeneratedColumn<String>(
+    'document_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _questionMeta = const VerificationMeta(
+    'question',
+  );
+  @override
+  late final GeneratedColumn<String> question = GeneratedColumn<String>(
+    'question',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _answerMeta = const VerificationMeta('answer');
+  @override
+  late final GeneratedColumn<String> answer = GeneratedColumn<String>(
+    'answer',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    documentId,
+    question,
+    answer,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'document_qas';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DocumentQa> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('document_id')) {
+      context.handle(
+        _documentIdMeta,
+        documentId.isAcceptableOrUnknown(data['document_id']!, _documentIdMeta),
+      );
+    }
+    if (data.containsKey('question')) {
+      context.handle(
+        _questionMeta,
+        question.isAcceptableOrUnknown(data['question']!, _questionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_questionMeta);
+    }
+    if (data.containsKey('answer')) {
+      context.handle(
+        _answerMeta,
+        answer.isAcceptableOrUnknown(data['answer']!, _answerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_answerMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DocumentQa map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DocumentQa(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      documentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_id'],
+      ),
+      question: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}question'],
+      )!,
+      answer: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}answer'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DocumentQasTable createAlias(String alias) {
+    return $DocumentQasTable(attachedDatabase, alias);
+  }
+}
+
+class DocumentQa extends DataClass implements Insertable<DocumentQa> {
+  final int id;
+  final String? documentId;
+  final String question;
+  final String answer;
+  final DateTime createdAt;
+  const DocumentQa({
+    required this.id,
+    this.documentId,
+    required this.question,
+    required this.answer,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || documentId != null) {
+      map['document_id'] = Variable<String>(documentId);
+    }
+    map['question'] = Variable<String>(question);
+    map['answer'] = Variable<String>(answer);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  DocumentQasCompanion toCompanion(bool nullToAbsent) {
+    return DocumentQasCompanion(
+      id: Value(id),
+      documentId: documentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(documentId),
+      question: Value(question),
+      answer: Value(answer),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory DocumentQa.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DocumentQa(
+      id: serializer.fromJson<int>(json['id']),
+      documentId: serializer.fromJson<String?>(json['documentId']),
+      question: serializer.fromJson<String>(json['question']),
+      answer: serializer.fromJson<String>(json['answer']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'documentId': serializer.toJson<String?>(documentId),
+      'question': serializer.toJson<String>(question),
+      'answer': serializer.toJson<String>(answer),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  DocumentQa copyWith({
+    int? id,
+    Value<String?> documentId = const Value.absent(),
+    String? question,
+    String? answer,
+    DateTime? createdAt,
+  }) => DocumentQa(
+    id: id ?? this.id,
+    documentId: documentId.present ? documentId.value : this.documentId,
+    question: question ?? this.question,
+    answer: answer ?? this.answer,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  DocumentQa copyWithCompanion(DocumentQasCompanion data) {
+    return DocumentQa(
+      id: data.id.present ? data.id.value : this.id,
+      documentId: data.documentId.present
+          ? data.documentId.value
+          : this.documentId,
+      question: data.question.present ? data.question.value : this.question,
+      answer: data.answer.present ? data.answer.value : this.answer,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DocumentQa(')
+          ..write('id: $id, ')
+          ..write('documentId: $documentId, ')
+          ..write('question: $question, ')
+          ..write('answer: $answer, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, documentId, question, answer, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DocumentQa &&
+          other.id == this.id &&
+          other.documentId == this.documentId &&
+          other.question == this.question &&
+          other.answer == this.answer &&
+          other.createdAt == this.createdAt);
+}
+
+class DocumentQasCompanion extends UpdateCompanion<DocumentQa> {
+  final Value<int> id;
+  final Value<String?> documentId;
+  final Value<String> question;
+  final Value<String> answer;
+  final Value<DateTime> createdAt;
+  const DocumentQasCompanion({
+    this.id = const Value.absent(),
+    this.documentId = const Value.absent(),
+    this.question = const Value.absent(),
+    this.answer = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  DocumentQasCompanion.insert({
+    this.id = const Value.absent(),
+    this.documentId = const Value.absent(),
+    required String question,
+    required String answer,
+    required DateTime createdAt,
+  }) : question = Value(question),
+       answer = Value(answer),
+       createdAt = Value(createdAt);
+  static Insertable<DocumentQa> custom({
+    Expression<int>? id,
+    Expression<String>? documentId,
+    Expression<String>? question,
+    Expression<String>? answer,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (documentId != null) 'document_id': documentId,
+      if (question != null) 'question': question,
+      if (answer != null) 'answer': answer,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  DocumentQasCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? documentId,
+    Value<String>? question,
+    Value<String>? answer,
+    Value<DateTime>? createdAt,
+  }) {
+    return DocumentQasCompanion(
+      id: id ?? this.id,
+      documentId: documentId ?? this.documentId,
+      question: question ?? this.question,
+      answer: answer ?? this.answer,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (documentId.present) {
+      map['document_id'] = Variable<String>(documentId.value);
+    }
+    if (question.present) {
+      map['question'] = Variable<String>(question.value);
+    }
+    if (answer.present) {
+      map['answer'] = Variable<String>(answer.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DocumentQasCompanion(')
+          ..write('id: $id, ')
+          ..write('documentId: $documentId, ')
+          ..write('question: $question, ')
+          ..write('answer: $answer, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3558,6 +3911,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FlashcardReviewsTable flashcardReviews = $FlashcardReviewsTable(
     this,
   );
+  late final $DocumentQasTable documentQas = $DocumentQasTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3572,6 +3926,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     searchHistory,
     quizSessions,
     flashcardReviews,
+    documentQas,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -6578,6 +6933,202 @@ typedef $$FlashcardReviewsTableProcessedTableManager =
       FlashcardReview,
       PrefetchHooks Function({bool noteId})
     >;
+typedef $$DocumentQasTableCreateCompanionBuilder =
+    DocumentQasCompanion Function({
+      Value<int> id,
+      Value<String?> documentId,
+      required String question,
+      required String answer,
+      required DateTime createdAt,
+    });
+typedef $$DocumentQasTableUpdateCompanionBuilder =
+    DocumentQasCompanion Function({
+      Value<int> id,
+      Value<String?> documentId,
+      Value<String> question,
+      Value<String> answer,
+      Value<DateTime> createdAt,
+    });
+
+class $$DocumentQasTableFilterComposer
+    extends Composer<_$AppDatabase, $DocumentQasTable> {
+  $$DocumentQasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get question => $composableBuilder(
+    column: $table.question,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get answer => $composableBuilder(
+    column: $table.answer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DocumentQasTableOrderingComposer
+    extends Composer<_$AppDatabase, $DocumentQasTable> {
+  $$DocumentQasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get question => $composableBuilder(
+    column: $table.question,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get answer => $composableBuilder(
+    column: $table.answer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DocumentQasTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DocumentQasTable> {
+  $$DocumentQasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get question =>
+      $composableBuilder(column: $table.question, builder: (column) => column);
+
+  GeneratedColumn<String> get answer =>
+      $composableBuilder(column: $table.answer, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$DocumentQasTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DocumentQasTable,
+          DocumentQa,
+          $$DocumentQasTableFilterComposer,
+          $$DocumentQasTableOrderingComposer,
+          $$DocumentQasTableAnnotationComposer,
+          $$DocumentQasTableCreateCompanionBuilder,
+          $$DocumentQasTableUpdateCompanionBuilder,
+          (
+            DocumentQa,
+            BaseReferences<_$AppDatabase, $DocumentQasTable, DocumentQa>,
+          ),
+          DocumentQa,
+          PrefetchHooks Function()
+        > {
+  $$DocumentQasTableTableManager(_$AppDatabase db, $DocumentQasTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DocumentQasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DocumentQasTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DocumentQasTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> documentId = const Value.absent(),
+                Value<String> question = const Value.absent(),
+                Value<String> answer = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => DocumentQasCompanion(
+                id: id,
+                documentId: documentId,
+                question: question,
+                answer: answer,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> documentId = const Value.absent(),
+                required String question,
+                required String answer,
+                required DateTime createdAt,
+              }) => DocumentQasCompanion.insert(
+                id: id,
+                documentId: documentId,
+                question: question,
+                answer: answer,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DocumentQasTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DocumentQasTable,
+      DocumentQa,
+      $$DocumentQasTableFilterComposer,
+      $$DocumentQasTableOrderingComposer,
+      $$DocumentQasTableAnnotationComposer,
+      $$DocumentQasTableCreateCompanionBuilder,
+      $$DocumentQasTableUpdateCompanionBuilder,
+      (
+        DocumentQa,
+        BaseReferences<_$AppDatabase, $DocumentQasTable, DocumentQa>,
+      ),
+      DocumentQa,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6600,4 +7151,6 @@ class $AppDatabaseManager {
       $$QuizSessionsTableTableManager(_db, _db.quizSessions);
   $$FlashcardReviewsTableTableManager get flashcardReviews =>
       $$FlashcardReviewsTableTableManager(_db, _db.flashcardReviews);
+  $$DocumentQasTableTableManager get documentQas =>
+      $$DocumentQasTableTableManager(_db, _db.documentQas);
 }

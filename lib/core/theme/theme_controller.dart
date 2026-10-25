@@ -9,9 +9,16 @@ class ThemeController extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final isDark = prefs.getBool('darkMode') ?? false;
-
-    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    final savedMode = prefs.getString('theme_mode');
+    if (savedMode != null) {
+      _themeMode = ThemeMode.values.firstWhere(
+        (m) => m.name == savedMode,
+        orElse: () => ThemeMode.light,
+      );
+    } else {
+      final isDark = prefs.getBool('darkMode') ?? false;
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    }
 
     notifyListeners();
   }
@@ -24,5 +31,6 @@ class ThemeController extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString('theme_mode', mode.name);
+    await prefs.setBool('darkMode', mode == ThemeMode.dark);
   }
 }

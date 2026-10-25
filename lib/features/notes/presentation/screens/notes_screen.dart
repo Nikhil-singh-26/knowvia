@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../../app/theme/app_colors.dart';
@@ -11,7 +12,7 @@ class NotesScreen extends ConsumerWidget {
   const NotesScreen({super.key});
 
   void _openCreateNote(BuildContext context) {
-    Navigator.pushNamed(context, '/notes/create');
+    context.push('/notes/create');
   }
 
   @override
@@ -21,16 +22,16 @@ class NotesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'My Notes',
+          'My Documents',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
           IconButton(
-            tooltip: 'Create note',
+            tooltip: 'Upload document',
             onPressed: () {
               _openCreateNote(context);
             },
-            icon: const Icon(Iconsax.add),
+            icon: const Icon(Iconsax.document_upload),
           ),
         ],
       ),
@@ -38,7 +39,7 @@ class NotesScreen extends ConsumerWidget {
         onPressed: () {
           _openCreateNote(context);
         },
-        child: const Icon(Iconsax.add),
+        child: const Icon(Iconsax.document_upload),
       ),
       body: StreamBuilder<List<Note>>(
         stream: database.select(database.notes).watch(),
@@ -48,7 +49,7 @@ class NotesScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Unable to load notes.\n\n${snapshot.error}',
+                  'Unable to load documents.\n\n${snapshot.error}',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -107,7 +108,7 @@ class NotesScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
-                          Iconsax.note,
+                          Iconsax.document_text,
                           color: AppColors.primary,
                           size: 22,
                         ),
@@ -187,18 +188,18 @@ class _EmptyNotes extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Iconsax.note_add,
+              Iconsax.document_upload,
               size: 58,
               color: AppColors.textSecondary,
             ),
             const SizedBox(height: 16),
             const Text(
-              'No notes yet',
+              'No documents yet',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             const Text(
-              'Create your first note and start building your knowledge base.',
+              'Upload your first document and start asking AI questions.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary),
             ),
@@ -206,7 +207,7 @@ class _EmptyNotes extends StatelessWidget {
             FilledButton.icon(
               onPressed: onCreate,
               icon: const Icon(Iconsax.add),
-              label: const Text('Create Note'),
+              label: const Text('Upload Document'),
             ),
           ],
         ),

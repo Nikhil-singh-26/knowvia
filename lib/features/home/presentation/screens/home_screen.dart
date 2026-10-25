@@ -122,14 +122,14 @@ class HomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(20),
                 children: [
                   const Text(
-                    'Your Knowledge',
+                    'Your Documents',
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
                   ),
 
                   const SizedBox(height: 8),
 
                   Text(
-                    'Capture, organize and connect what you learn.',
+                    'Upload documents & ask AI anything about them.',
                     style: TextStyle(
                       color: Theme.of(
                         context,
@@ -143,8 +143,8 @@ class HomeScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: _StatCard(
-                          icon: Iconsax.note,
-                          title: 'Notes',
+                          icon: Iconsax.document_text,
+                          title: 'Documents',
                           value: '${notes.length}',
                         ),
                       ),
@@ -169,9 +169,9 @@ class HomeScreen extends ConsumerWidget {
                       onPressed: () {
                         context.push('/notes/create');
                       },
-                      icon: const Icon(Iconsax.add),
+                      icon: const Icon(Iconsax.document_upload),
                       label: const Text(
-                        'Create New Note',
+                        'Upload Document',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -180,7 +180,7 @@ class HomeScreen extends ConsumerWidget {
                   const SizedBox(height: 30),
 
                   const Text(
-                    'Recent Notes',
+                    'Recent Documents',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                   ),
 
@@ -276,7 +276,7 @@ class _NoteCard extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: const Icon(Iconsax.note, color: AppColors.primary),
+              child: const Icon(Iconsax.document_text, color: AppColors.primary),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -329,19 +329,19 @@ class _EmptyRecentNotes extends StatelessWidget {
       child: Column(
         children: [
           const Icon(
-            Iconsax.note_add,
+            Iconsax.document_upload,
             size: 42,
             color: AppColors.textSecondary,
           ),
           const SizedBox(height: 12),
           const Text(
-            'No notes yet',
+            'No documents yet',
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           OutlinedButton(
             onPressed: onCreate,
-            child: const Text('Create your first note'),
+            child: const Text('Upload your first document'),
           ),
         ],
       ),

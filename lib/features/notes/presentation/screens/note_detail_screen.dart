@@ -2,8 +2,12 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../../../core/ai/ai_provider.dart';
 import '../../../../core/ai/concept_service.dart';
@@ -24,11 +28,23 @@ class NoteDetailScreen extends ConsumerStatefulWidget {
 
 class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
   late Note _currentNote;
+  final TextEditingController _qaQuestionController = TextEditingController();
+  final ScrollController _qaScrollController = ScrollController();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  bool _isQaLoading = false;
 
   @override
   void initState() {
     super.initState();
     _currentNote = widget.note;
+  }
+
+  @override
+  void dispose() {
+    _qaQuestionController.dispose();
+    _qaScrollController.dispose();
+    super.dispose();
   }
 
   bool _isOnline() {
@@ -626,6 +642,115 @@ ${note.content}
     }
   }
 
+  Future<void> _listenQa() async {
+    if (!_isListening) {
+      final available = await _speech.initialize();
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (val) {
+            setState(() {
+              if (val.recognizedWords.isNotEmpty) {
+                _qaQuestionController.text = val.recognizedWords;
+              }
+            });
+          },
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+    }
+  }
+
+  Future<void> _submitDocQa(Note note, String queryText) async {
+    final query = queryText.trim();
+    if (query.isEmpty) return;
+
+    if (!_isOnline()) {
+      _showOfflineMessage();
+      return;
+    }
+
+    _qaQuestionController.clear();
+    setState(() => _isQaLoading = true);
+    FocusScope.of(context).unfocus();
+
+    try {
+      final gemini = ref.read(geminiServiceProvider);
+      final db = ref.read(databaseProvider);
+
+      final pastQas = await db.getQasForDocument(note.id);
+      final history = pastQas.map((q) => {
+        'question': q.question,
+        'answer': q.answer,
+      }).toList();
+
+      final answer = await gemini.askDocumentQuestion(
+        documentTitle: note.title,
+        documentContent: note.content,
+        question: query,
+        history: history,
+      );
+
+      await db.insertQa(
+        documentId: note.id,
+        question: query,
+        answer: answer,
+      );
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_qaScrollController.hasClients) {
+          _qaScrollController.animateTo(
+            _qaScrollController.position.maxScrollExtent + 200,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Q&A Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isQaLoading = false);
+    }
+  }
+
+  Future<void> _clearDocQa(Note note) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Clear Q&A History?'),
+        content: const Text(
+          'This will delete all saved questions and answers for this document.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final db = ref.read(databaseProvider);
+      await db.clearQasForDocument(note.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document Q&A history cleared')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final database = ref.watch(databaseProvider);
@@ -638,263 +763,641 @@ ${note.content}
         final note = snapshot.data ?? _currentNote;
         final attachments = AttachmentHelper.decode(note.attachmentPaths);
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text(
-              'Note Details',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            actions: [
-              IconButton(
-                tooltip: 'AI Analysis',
-                onPressed: () {
-                  if (note.aiSummary != null &&
-                      note.aiSummary!.trim().isNotEmpty) {
-                    final cachedResult = jsonEncode({
-                      'summary': note.aiSummary,
-                      'topics': note.aiTopics == null
-                          ? []
-                          : jsonDecode(note.aiTopics!),
-                      'keywords': note.aiKeywords == null
-                          ? []
-                          : jsonDecode(note.aiKeywords!),
-                      'difficulty': note.aiDifficulty ?? '',
-                      'relatedConcepts': note.aiRelatedConcepts == null
-                          ? []
-                          : jsonDecode(note.aiRelatedConcepts!),
-                    });
-                    _showAiResult(context, cachedResult);
-                  } else {
-                    _analyzeWithAi(context, ref, note);
-                  }
-                },
-                icon: const Icon(Iconsax.magic_star),
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text(
+                'Document Details',
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
-              IconButton(
-                tooltip: 'Edit',
-                onPressed: () => _editNote(note),
-                icon: const Icon(Iconsax.edit),
-              ),
-              IconButton(
-                tooltip: 'Share',
-                onPressed: () => _shareNote(note),
-                icon: const Icon(Iconsax.share),
-              ),
-              IconButton(
-                tooltip: 'Delete',
-                onPressed: _deleteNote,
-                icon: const Icon(Iconsax.trash),
-              ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  note.title,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        note.category,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Iconsax.document,
-                      size: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'Knowledge Note',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: Text(
-                    note.content.trim().isEmpty ? 'No content' : note.content,
-                    style: const TextStyle(fontSize: 16, height: 1.6),
-                  ),
-                ),
-                if (attachments.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Attachments',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 12),
-                  ...attachments.map((path) {
-                    final file = File(path);
-                    final extension = path.split('.').last.toLowerCase();
-                    final isImage = [
-                      'jpg',
-                      'jpeg',
-                      'png',
-                      'webp',
-                      'gif',
-                    ].contains(extension);
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outline.withValues(alpha: 0.18),
-                        ),
-                      ),
-                      child: isImage
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: GestureDetector(
-                                onTap: () => _openAttachment(context, file),
-                                child: Image.file(
-                                  file,
-                                  height: 220,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Padding(
-                                        padding: EdgeInsets.all(20),
-                                        child: Text(
-                                          'Image could not be loaded',
-                                        ),
-                                      ),
-                                ),
-                              ),
-                            )
-                          : ListTile(
-                              leading: const Icon(
-                                Iconsax.document,
-                                color: AppColors.primary,
-                              ),
-                              title: Text(
-                                file.path.split(Platform.pathSeparator).last,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: IconButton(
-                                tooltip: 'Open',
-                                icon: const Icon(Iconsax.export),
-                                onPressed: () => _openAttachment(context, file),
-                              ),
-                            ),
-                    );
-                  }),
+              bottom: const TabBar(
+                indicatorColor: AppColors.primary,
+                labelColor: AppColors.primary,
+                tabs: [
+                  Tab(icon: Icon(Iconsax.document_text), text: 'Content'),
+                  Tab(icon: Icon(Iconsax.message_question), text: 'AI Q&A'),
                 ],
-                const SizedBox(height: 20),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Iconsax.lamp_charge,
-                        size: 20,
-                        color: AppColors.primary,
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'This note is part of your knowledge map.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'AI Analysis',
+                  onPressed: () {
+                    if (note.aiSummary != null &&
+                        note.aiSummary!.trim().isNotEmpty) {
+                      final cachedResult = jsonEncode({
+                        'summary': note.aiSummary,
+                        'topics': note.aiTopics == null
+                            ? []
+                            : jsonDecode(note.aiTopics!),
+                        'keywords': note.aiKeywords == null
+                            ? []
+                            : jsonDecode(note.aiKeywords!),
+                        'difficulty': note.aiDifficulty ?? '',
+                        'relatedConcepts': note.aiRelatedConcepts == null
+                            ? []
+                            : jsonDecode(note.aiRelatedConcepts!),
+                      });
+                      _showAiResult(context, cachedResult);
+                    } else {
+                      _analyzeWithAi(context, ref, note);
+                    }
+                  },
+                  icon: const Icon(Iconsax.magic_star),
                 ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: () => _studyNext(context, ref, note),
-                    icon: const Icon(Iconsax.teacher),
-                    label: const Text(
-                      'What should I study next?',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
+                IconButton(
+                  tooltip: 'Edit',
+                  onPressed: () => _editNote(note),
+                  icon: const Icon(Iconsax.edit),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _generateQuiz(context, ref, note),
-                    icon: const Icon(Iconsax.task_square),
-                    label: const Text(
-                      'Test My Knowledge',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
+                IconButton(
+                  tooltip: 'Share',
+                  onPressed: () => _shareNote(note),
+                  icon: const Icon(Iconsax.share),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _generateFlashcards(context, ref, note),
-                    icon: const Icon(Iconsax.cards),
-                    label: const Text(
-                      'Study with Flashcards',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
+                IconButton(
+                  tooltip: 'Delete',
+                  onPressed: _deleteNote,
+                  icon: const Icon(Iconsax.trash),
                 ),
+              ],
+            ),
+            body: TabBarView(
+              children: [
+                _buildOverviewTab(context, note, attachments),
+                _buildQaTab(context, note),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildOverviewTab(
+    BuildContext context,
+    Note note,
+    List<String> attachments,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            note.title,
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  note.category,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Iconsax.document_favorite, size: 14),
+                    const SizedBox(width: 5),
+                    Text(
+                      note.sourceType.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // AI Summary Banner if present
+          if (note.aiSummary != null && note.aiSummary!.trim().isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Iconsax.magic_star, size: 18, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Text(
+                        'AI Executive Summary',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    note.aiSummary!,
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          // Extracted Text Card
+          const Text(
+            'Document Content',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
+              ),
+            ),
+            child: SelectableText(
+              note.content.trim().isEmpty ? 'No content' : note.content,
+              style: const TextStyle(fontSize: 15, height: 1.6),
+            ),
+          ),
+
+          if (attachments.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const Text(
+              'Attachments',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            ...attachments.map((path) {
+              final file = File(path);
+              final extension = path.split('.').last.toLowerCase();
+              final isImage = [
+                'jpg',
+                'jpeg',
+                'png',
+                'webp',
+                'gif',
+              ].contains(extension);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: isImage
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: GestureDetector(
+                          onTap: () => _openAttachment(context, file),
+                          child: Image.file(
+                            file,
+                            height: 220,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Text('Image could not be loaded'),
+                                ),
+                          ),
+                        ),
+                      )
+                    : ListTile(
+                        leading: const Icon(
+                          Iconsax.document,
+                          color: AppColors.primary,
+                        ),
+                        title: Text(
+                          file.path.split(Platform.pathSeparator).last,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Open',
+                          icon: const Icon(Iconsax.export),
+                          onPressed: () => _openAttachment(context, file),
+                        ),
+                      ),
+              );
+            }),
+          ],
+
+          const SizedBox(height: 24),
+
+          // Study & Analysis Tools
+          const Text(
+            'Document Tools',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.tonalIcon(
+              onPressed: () => _generateQuiz(context, ref, note),
+              icon: const Icon(Iconsax.task_square),
+              label: const Text(
+                'Generate Knowledge Quiz',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              onPressed: () => _generateFlashcards(context, ref, note),
+              icon: const Icon(Iconsax.cards),
+              label: const Text(
+                'Study with Flashcards',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              onPressed: () => _studyNext(context, ref, note),
+              icon: const Icon(Iconsax.teacher),
+              label: const Text(
+                'What should I study next?',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQaTab(BuildContext context, Note note) {
+    final db = ref.watch(databaseProvider);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final suggested = [
+      'Summarize this document in 3 key points',
+      'What are the core conclusions or takeaways?',
+      'Explain complex concepts mentioned here',
+      'List all action items or facts',
+    ];
+
+    return Column(
+      children: [
+        // Top Toolbar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: theme.colorScheme.surface,
+          child: Row(
+            children: [
+              const Icon(Iconsax.message_question, color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Ask AI questions about this document',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Iconsax.trash, size: 18),
+                tooltip: 'Clear Q&A History',
+                onPressed: () => _clearDocQa(note),
+              ),
+            ],
+          ),
+        ),
+
+        const Divider(height: 1),
+
+        // Chat stream
+        Expanded(
+          child: StreamBuilder<List<DocumentQa>>(
+            stream: db.watchQasForDocument(note.id),
+            builder: (context, snapshot) {
+              final qas = snapshot.data ?? [];
+
+              if (qas.isEmpty && !_isQaLoading) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Iconsax.messages_3,
+                          color: AppColors.primary,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Ask anything about "${note.title}"',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Type or speak your question below.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: suggested.map((q) {
+                          return ActionChip(
+                            avatar: const Icon(Iconsax.magic_star, size: 14, color: AppColors.primary),
+                            label: Text(q, style: const TextStyle(fontSize: 12)),
+                            onPressed: () => _submitDocQa(note, q),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                controller: _qaScrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: qas.length + (_isQaLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == qas.length) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Analyzing document...',
+                              style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final qa = qas[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // User Question
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.8,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              qa.question,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // AI Answer
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E1E26) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Iconsax.magic_star,
+                                      size: 14,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      'Know Via AI',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Iconsax.copy, size: 15),
+                                      constraints: const BoxConstraints(),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: () {
+                                        Clipboard.setData(
+                                          ClipboardData(text: qa.answer),
+                                        );
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Copied to clipboard'),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                MarkdownBody(
+                                  data: qa.answer,
+                                  selectable: true,
+                                  styleSheet: MarkdownStyleSheet.fromTheme(
+                                    theme,
+                                  ).copyWith(
+                                    p: TextStyle(
+                                      fontSize: 14,
+                                      height: 1.5,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  DateFormat('h:mm a').format(qa.createdAt),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+
+        // Bottom Input Area
+        Container(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            MediaQuery.of(context).padding.bottom + 8,
+          ),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.outline.withValues(alpha: 0.12),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: Icon(
+                  _isListening ? Iconsax.stop : Iconsax.microphone_2,
+                  color: _isListening ? Colors.red : AppColors.primary,
+                ),
+                onPressed: _listenQa,
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _qaQuestionController,
+                  minLines: 1,
+                  maxLines: 4,
+                  onSubmitted: (txt) => _submitDocQa(note, txt),
+                  decoration: InputDecoration(
+                    hintText: 'Ask about this document...',
+                    hintStyle: const TextStyle(fontSize: 13),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                icon: _isQaLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Iconsax.send_1, size: 16),
+                onPressed: _isQaLoading
+                    ? null
+                    : () => _submitDocQa(note, _qaQuestionController.text),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

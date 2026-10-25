@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-// import '../core/theme/theme_controller.dart';
 import 'router.dart';
 
 class KnowViaApp extends StatefulWidget {
